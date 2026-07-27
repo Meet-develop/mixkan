@@ -5,6 +5,7 @@ import Link from "next/link";
 import { useParams, useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { AvatarName } from "@/components/ui/avatar-name";
+import { EventConfirmModal } from "@/components/ui/event-confirm-modal";
 import { formatEventStartLabel } from "@/lib/datetime";
 
 type EventDetail = {
@@ -56,6 +57,8 @@ export default function EventManagePage() {
   const [placeCandidateId, setPlaceCandidateId] = useState<string | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [isConfirming, setIsConfirming] = useState(false);
 
   const applyEventState = (data: EventDetail) => {
     setEvent(data);
@@ -182,14 +185,20 @@ export default function EventManagePage() {
     refreshEvent();
   };
 
-  const handleConfirm = async () => {
+  const handleExecuteConfirm = async () => {
     if (!ownerId) return;
-    await fetch(`/api/events/${eventId}/confirm`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ownerId, timeCandidateId, placeCandidateId }),
-    });
-    refreshEvent();
+    setIsConfirming(true);
+    try {
+      await fetch(`/api/events/${eventId}/confirm`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ownerId, timeCandidateId, placeCandidateId }),
+      });
+      await refreshEvent();
+    } finally {
+      setIsConfirming(false);
+      setShowConfirmModal(false);
+    }
   };
 
   const handleDeleteEvent = async () => {
@@ -377,7 +386,7 @@ export default function EventManagePage() {
 
         <div className="mt-8">
           <button
-            onClick={handleConfirm}
+            onClick={() => setShowConfirmModal(true)}
             disabled={
               !ownerId ||
               event.owner.userId !== ownerId ||
@@ -418,6 +427,13 @@ export default function EventManagePage() {
           </button>
         </section>
       </main>
+
+      <EventConfirmModal
+        isOpen={showConfirmModal}
+        onClose={() => setShowConfirmModal(false)}
+        onConfirm={handleExecuteConfirm}
+        isConfirming={isConfirming}
+      />
     </div>
   );
 }
