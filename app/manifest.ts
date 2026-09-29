@@ -2,9 +2,9 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Meet & Moc",
-    short_name: "MeetMoc",
-    description: "Smart event coordination with friend-first scheduling.",
+    name: "mixkan（みかん）",
+    short_name: "mixkan",
+    description: "日程調整と店決めを投票で同時に。候補はAIが自動選定、発案から募集まで10秒の幹事支援アプリ。",
     start_url: "/",
     scope: "/",
     display: "standalone",
@@ -12,16 +12,12 @@ export default function manifest(): MetadataRoute.Manifest {
     theme_color: "#ff6b4a",
     lang: "ja",
     icons: [
+      { src: "/pwa-icon-192.png", sizes: "192x192", type: "image/png" },
       {
-        src: "/pwa-icon.svg",
-        sizes: "any",
-        type: "image/svg+xml",
-        purpose: "maskable",
-      },
-      {
-        src: "/line_120.png",
-        sizes: "120x120",
+        src: "/pwa-icon-512.png",
+        sizes: "512x512",
         type: "image/png",
+        purpose: "maskable",
       },
     ],
   };
