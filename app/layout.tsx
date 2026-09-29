@@ -17,36 +17,71 @@ const spaceMono = Space_Mono({
   weight: ["400", "700"],
 });
 
-const title = "Meet & Moc";
-const description = "Smart event coordination with friend-first scheduling.";
+const siteName = "mixkan";
+const title = "mixkan（みかん）｜日程調整と店決めを同時に。AIが候補を10秒で作成";
+const description =
+  "mixkan（みかん）は「みんなで、簡単」「みんなで、幹事」「みんなで、乾杯」をコンセプトにした幹事支援アプリ。友達との飲み会、会社の懇親会、同窓会、コミュニティイベントの日程調整と店決めを投票で同時に行えます。日程やお店の候補はAIが自動で選定するので、発案から募集開始まで10秒です。";
+
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebSite",
+      "@id": `${getMetadataBaseUrl().origin}/#website`,
+      url: getMetadataBaseUrl().origin,
+      name: siteName,
+      alternateName: ["みかん", "mixkan（みかん）"],
+      description,
+      inLanguage: "ja-JP",
+    },
+    {
+      "@type": "WebApplication",
+      name: siteName,
+      url: getMetadataBaseUrl().origin,
+      description,
+      applicationCategory: "LifestyleApplication",
+      operatingSystem: "Web",
+      inLanguage: "ja-JP",
+      offers: { "@type": "Offer", price: "0", priceCurrency: "JPY" },
+    },
+  ],
+};
 
 export const metadata: Metadata = {
   metadataBase: getMetadataBaseUrl(),
-  title,
+  title: { default: title, template: `%s | ${siteName}` },
   description,
+  applicationName: siteName,
+  keywords: [
+    "mixkan",
+    "みかん",
+    "幹事",
+    "日程調整",
+    "店決め",
+    "飲み会",
+    "懇親会",
+    "同窓会",
+    "イベント",
+    "投票",
+    "AI",
+  ],
+  alternates: { canonical: "/" },
   manifest: "/manifest.webmanifest",
   appleWebApp: {
     capable: true,
     statusBarStyle: "default",
-    title,
-  },
-  icons: {
-    icon: [
-      { url: "/pwa-icon.svg", type: "image/svg+xml" },
-    ],
-    apple: [
-      { url: "/line_120.png", sizes: "120x120", type: "image/png" },
-    ],
+    title: siteName,
   },
   openGraph: {
     title,
     description,
-    siteName: title,
+    siteName,
+    url: "/",
     locale: "ja_JP",
     type: "website",
   },
   twitter: {
-    card: "summary",
+    card: "summary_large_image",
     title,
     description,
   },
@@ -72,6 +107,10 @@ export default function RootLayout({
       <body
         className={`${sora.variable} ${spaceMono.variable} bg-[var(--background)] antialiased pb-24 md:pb-0`}
       >
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
         <Providers>
           {children}
           <MobileBottomNav />
