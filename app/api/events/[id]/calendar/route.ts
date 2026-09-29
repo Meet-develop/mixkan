@@ -27,7 +27,7 @@ const createIcsBody = (params: {
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
     "CALSCALE:GREGORIAN",
-    "PRODID:-//Meet MOC//Event Calendar//JA",
+    "PRODID:-//mixkan//Event Calendar//JA",
     "METHOD:PUBLISH",
     "BEGIN:VEVENT",
     `UID:${params.uid}`,
