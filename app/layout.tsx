@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Sora, Space_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
+import { GoogleAnalytics } from "@/components/google-analytics";
 import { MobileBottomNav } from "@/components/navigation/mobile-bottom-nav";
 import { getMetadataBaseUrl } from "@/lib/site-url";
 
@@ -115,6 +116,7 @@ export default function RootLayout({
           {children}
           <MobileBottomNav />
         </Providers>
+        <GoogleAnalytics />
       </body>
     </html>
   );
