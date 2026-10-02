@@ -523,21 +523,21 @@ export default function ProfileSetupPage() {
       Boolean(birthDate),
       Boolean(playFrequency),
       Boolean(drinkFrequency),
+      Boolean(budgetOption),
       ngFoods.length > 0,
       favoriteAreas.length > 0,
       favoritePlaces.length > 0,
-      frequentPlaces.length > 0,
       Object.values(weekdaySlots).some((slot) => slot.daytime || slot.night),
     ];
     const done = localChecks.filter(Boolean).length;
     return Math.round((done / localChecks.length) * 100);
   }, [
     birthDate,
+    budgetOption,
     displayName,
     drinkFrequency,
     favoriteAreas.length,
     favoritePlaces.length,
-    frequentPlaces.length,
     ngFoods.length,
     playFrequency,
     weekdaySlots,
@@ -676,9 +676,9 @@ export default function ProfileSetupPage() {
         displayName,
         avatarIcon,
         gender,
-        birthDate: birthDate || undefined,
-        playFrequency: playFrequency || undefined,
-        drinkFrequency: drinkFrequency || undefined,
+        birthDate: birthDate || null,
+        playFrequency: playFrequency || null,
+        drinkFrequency: drinkFrequency || null,
         budgetMin: selectedBudget.min,
         budgetMax: selectedBudget.max,
         ngFoods,
@@ -702,6 +702,7 @@ export default function ProfileSetupPage() {
       setMessage("更新しました。");
       setAvatarUploadMessage(null);
       setInitialSnapshot(currentSnapshot);
+      window.dispatchEvent(new CustomEvent("profile-updated"));
       const refreshed = await fetch(
         `/api/profiles/${userId}?viewerId=${encodeURIComponent(userId)}`,
         { cache: "no-store" }
