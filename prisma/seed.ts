@@ -351,6 +351,16 @@ const events = [
     fixedPlaceName: "皆生海辺カフェ",
     fixedPlaceAddress: "鳥取県米子市皆生温泉4-8-2",
   },
+  {
+    id: "77777777-eeee-eeee-eeee-eeeeeeeeeeee",
+    ownerId: users[0].userId,
+    purpose: "秋の懇親会",
+    area: "渋谷",
+    visibility: "limited" as const,
+    capacity: 8,
+    status: "open" as const,
+    scheduleMode: "candidate" as const,
+  },
 ];
 
 const participants = [
@@ -371,6 +381,15 @@ const participants = [
   { eventId: events[5].id, userId: users[5].userId, status: "approved" as const, role: "guest" as const },
   { eventId: events[6].id, userId: users[1].userId, status: "approved" as const, role: "owner" as const },
   { eventId: events[6].id, userId: users[0].userId, status: "approved" as const, role: "guest" as const },
+  // 秋の懇親会 (events[7]) — ゆうと がオーナー、6人承認済み + あおいは申請中
+  { eventId: events[7].id, userId: users[0].userId, status: "approved" as const, role: "owner" as const },
+  { eventId: events[7].id, userId: users[1].userId, status: "approved" as const, role: "guest" as const },
+  { eventId: events[7].id, userId: users[2].userId, status: "approved" as const, role: "guest" as const },
+  { eventId: events[7].id, userId: users[3].userId, status: "approved" as const, role: "guest" as const },
+  { eventId: events[7].id, userId: users[4].userId, status: "approved" as const, role: "guest" as const },
+  { eventId: events[7].id, userId: users[5].userId, status: "approved" as const, role: "guest" as const },
+  { eventId: events[7].id, userId: users[6].userId, status: "approved" as const, role: "guest" as const },
+  { eventId: events[7].id, userId: users[7].userId, status: "requested" as const, role: "guest" as const },
 ];
 
 const invites = [
@@ -458,6 +477,48 @@ const timeCandidates = [
     score: 3,
     source: "proposal" as const,
     proposedBy: users[0].userId,
+  },
+  // 秋の懇親会 (events[7]) — 9月〜10月の土曜日 5候補
+  {
+    id: "e9111111-1111-1111-1111-111111111111",
+    eventId: events[7].id,
+    startTime: new Date("2026-09-05T09:00:00.000Z"), // 土 18:00 JST
+    endTime: new Date("2026-09-05T12:00:00.000Z"),
+    score: 0,
+    source: "system" as const,
+  },
+  {
+    id: "e9222222-2222-2222-2222-222222222222",
+    eventId: events[7].id,
+    startTime: new Date("2026-09-12T10:00:00.000Z"), // 土 19:00 JST
+    endTime: new Date("2026-09-12T13:00:00.000Z"),
+    score: 0,
+    source: "system" as const,
+  },
+  {
+    id: "e9333333-3333-3333-3333-333333333333",
+    eventId: events[7].id,
+    startTime: new Date("2026-09-19T09:30:00.000Z"), // 土 18:30 JST
+    endTime: new Date("2026-09-19T12:30:00.000Z"),
+    score: 0,
+    source: "system" as const,
+  },
+  {
+    id: "e9444444-4444-4444-4444-444444444444",
+    eventId: events[7].id,
+    startTime: new Date("2026-09-26T10:00:00.000Z"), // 土 19:00 JST
+    endTime: new Date("2026-09-26T13:00:00.000Z"),
+    score: 0,
+    source: "proposal" as const,
+    proposedBy: users[2].userId,
+  },
+  {
+    id: "e9555555-5555-5555-5555-555555555555",
+    eventId: events[7].id,
+    startTime: new Date("2026-10-03T09:00:00.000Z"), // 土 18:00 JST
+    endTime: new Date("2026-10-03T12:00:00.000Z"),
+    score: 0,
+    source: "system" as const,
   },
 ];
 
@@ -547,6 +608,33 @@ const timeVotes = [
   { candidateId: timeCandidates[3].id, userId: users[2].userId, availability: "available" as const },
   { candidateId: timeCandidates[4].id, userId: users[0].userId, availability: "maybe" as const },
   { candidateId: timeCandidates[5].id, userId: users[5].userId, availability: "available" as const },
+  // 秋の懇親会 — 候補1 (9/5): ○4 △1 ×0 未2 → スコア最高
+  { candidateId: timeCandidates[6].id, userId: users[0].userId, availability: "available" as const },
+  { candidateId: timeCandidates[6].id, userId: users[1].userId, availability: "available" as const },
+  { candidateId: timeCandidates[6].id, userId: users[2].userId, availability: "available" as const },
+  { candidateId: timeCandidates[6].id, userId: users[3].userId, availability: "available" as const },
+  { candidateId: timeCandidates[6].id, userId: users[4].userId, availability: "maybe" as const },
+  // 候補2 (9/12): ○3 △2 ×1 未1
+  { candidateId: timeCandidates[7].id, userId: users[0].userId, availability: "available" as const },
+  { candidateId: timeCandidates[7].id, userId: users[1].userId, availability: "available" as const },
+  { candidateId: timeCandidates[7].id, userId: users[2].userId, availability: "maybe" as const },
+  { candidateId: timeCandidates[7].id, userId: users[3].userId, availability: "maybe" as const },
+  { candidateId: timeCandidates[7].id, userId: users[4].userId, availability: "unavailable" as const },
+  { candidateId: timeCandidates[7].id, userId: users[5].userId, availability: "available" as const },
+  // 候補3 (9/19): △1 — 未投票多め
+  { candidateId: timeCandidates[8].id, userId: users[0].userId, availability: "maybe" as const },
+  { candidateId: timeCandidates[8].id, userId: users[1].userId, availability: "unavailable" as const },
+  // 候補4 (9/26): ×4 ○3 — 逆転パターン
+  { candidateId: timeCandidates[9].id, userId: users[0].userId, availability: "unavailable" as const },
+  { candidateId: timeCandidates[9].id, userId: users[1].userId, availability: "unavailable" as const },
+  { candidateId: timeCandidates[9].id, userId: users[2].userId, availability: "unavailable" as const },
+  { candidateId: timeCandidates[9].id, userId: users[3].userId, availability: "unavailable" as const },
+  { candidateId: timeCandidates[9].id, userId: users[4].userId, availability: "available" as const },
+  { candidateId: timeCandidates[9].id, userId: users[5].userId, availability: "available" as const },
+  { candidateId: timeCandidates[9].id, userId: users[6].userId, availability: "available" as const },
+  // 候補5 (10/3): 少数投票
+  { candidateId: timeCandidates[10].id, userId: users[0].userId, availability: "available" as const },
+  { candidateId: timeCandidates[10].id, userId: users[1].userId, availability: "maybe" as const },
 ];
 
 const placeVotes = [

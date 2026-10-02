@@ -1365,7 +1365,7 @@ export default function EventDetailPage() {
                               }`}
                               aria-label="たぶん参加できる"
                             >
-                              <span className="material-symbols-rounded material-symbols-rounded-outline">change_history</span>
+                              <span className="material-symbols-rounded-outline material-symbols-rounded">change_history</span>
                             </button>
                             <button
                               onClick={() => handleTimeVote(candidate.id, "unavailable")}
