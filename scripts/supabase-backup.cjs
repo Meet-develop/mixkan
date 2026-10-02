@@ -35,8 +35,8 @@ if (!supabaseServiceRoleKey) {
 const backupTime = new Date();
 const timestamp = backupTime.toISOString().replace(/[:.]/g, "-");
 const sha = (process.env.GITHUB_SHA || "manual").slice(0, 7);
-const fileName = `meet-moc-${timestamp}-${sha}.dump`;
-const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "meet-moc-backup-"));
+const fileName = `mixkan-${timestamp}-${sha}.dump`;
+const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "mixkan-backup-"));
 const dumpPath = path.join(tempDir, fileName);
 const storagePath = `${bucketPrefix}/${backupTime.toISOString().slice(0, 10)}/${fileName}`;
 

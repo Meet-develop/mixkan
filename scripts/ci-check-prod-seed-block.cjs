@@ -47,10 +47,10 @@ const checkDockerComposeGuard = () => {
   const content = fs.readFileSync(composePath, "utf8");
   const hasGuard = content.includes("SEED_ON_STARTUP") && content.includes("npm run db:seed");
   const hasLocalDbPin = content.includes(
-    'DATABASE_URL: "postgresql://postgres:postgres@db:5432/meet_moc"'
+    'DATABASE_URL: "postgresql://postgres:postgres@db:5432/mixkan"'
   );
   const hasLocalDirectPin = content.includes(
-    'DIRECT_URL: "postgresql://postgres:postgres@db:5432/meet_moc"'
+    'DIRECT_URL: "postgresql://postgres:postgres@db:5432/mixkan"'
   );
 
   if (!hasGuard) {

@@ -25,7 +25,7 @@ fi
 
 # ── 設定値 ──
 TOKEN="${GITHUB_PERSONAL_ACCESS_TOKEN:-}"
-REPO="${GITHUB_REPO:-Meet-develop/meet-moc}"
+REPO="${GITHUB_REPO:-Meet-develop/mixkan}"
 BASE_BRANCH="${GITHUB_BASE_BRANCH:-develop}"
 API="https://api.github.com"
 
@@ -172,7 +172,7 @@ Closes #$ISSUE_NUMBER"
 
 環境変数 (.env.local で設定):
   GITHUB_PERSONAL_ACCESS_TOKEN  GitHub PAT (必須)
-  GITHUB_REPO                   リポジトリ (デフォルト: Meet-develop/meet-moc)
+  GITHUB_REPO                   リポジトリ (デフォルト: Meet-develop/mixkan)
   GITHUB_BASE_BRANCH            ベースブランチ (デフォルト: develop)
 HELP
     ;;

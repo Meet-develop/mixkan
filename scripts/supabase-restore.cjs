@@ -31,7 +31,7 @@ if (!supabaseServiceRoleKey) {
   fail("SUPABASE_SERVICE_ROLE_KEY is required.");
 }
 
-const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "meet-moc-restore-"));
+const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), "mixkan-restore-"));
 const localDumpPath = path.join(tempDir, "restore.dump");
 
 const cleanup = () => {

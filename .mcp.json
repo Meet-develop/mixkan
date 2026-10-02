@@ -1,0 +1,8 @@
+{
+  "mcpServers": {
+    "github": {
+      "command": "bash",
+      "args": [".claude/scripts/mcp-github-wrapper.sh"]
+    }
+  }
+}

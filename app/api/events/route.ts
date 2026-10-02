@@ -211,7 +211,6 @@ export async function GET(request: Request) {
           score: candidate.score,
         }));
       const placeCandidates = [...event.placeCandidates]
-        .sort((a: any, b: any) => b.score - a.score)
         .slice(0, 3)
         .map((candidate: any) => ({
           id: candidate.id,

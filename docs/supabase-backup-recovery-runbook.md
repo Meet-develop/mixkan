@@ -71,7 +71,7 @@ GitHub Actions から定期的に `pg_dump` を実行し、Supabase Storage に�
 保存先の例:
 
 - bucket: `db-backups`
-- path: `production/YYYY-MM-DD/meet-moc-<timestamp>-<sha>.dump`
+- path: `production/YYYY-MM-DD/mixkan-<timestamp>-<sha>.dump`
 
 補足:
 
@@ -90,7 +90,7 @@ npm run restore:supabase
 特定のバックアップを指定したい場合は、Storage の path を明示する。
 
 ```bash
-BACKUP_STORAGE_PATH="production/2026-05-30/meet-moc-<timestamp>-<sha>.dump" npm run restore:supabase
+BACKUP_STORAGE_PATH="production/2026-05-30/mixkan-<timestamp>-<sha>.dump" npm run restore:supabase
 ```
 
 必要な Secrets:

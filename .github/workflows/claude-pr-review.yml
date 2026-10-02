@@ -1,0 +1,106 @@
+name: Claude PR Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  issue_comment:
+    types: [created]
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    if: |
+      github.event_name == 'pull_request' ||
+      (github.event_name == 'issue_comment' &&
+       github.event.issue.pull_request != null &&
+       contains(github.event.comment.body, '@claude'))
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Select review model
+        id: model
+        run: |
+          if [ "${{ github.event_name }}" != "pull_request" ]; then
+            echo "model=claude-sonnet-4-6" >> "$GITHUB_OUTPUT"
+            echo "→ Sonnet (手動トリガー)"
+            exit 0
+          fi
+
+          BASE_SHA="${{ github.event.pull_request.base.sha }}"
+          HEAD_SHA="${{ github.event.pull_request.head.sha }}"
+
+          FILES_COUNT=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" | wc -l | tr -d ' ')
+          SECURITY_COUNT=$(git diff --name-only "$BASE_SHA" "$HEAD_SHA" \
+            | grep -E "^(app/api/|middleware\.|prisma/schema|lib/)" \
+            | wc -l | tr -d ' ')
+
+          echo "変更ファイル数: $FILES_COUNT, セキュリティ関連: $SECURITY_COUNT"
+
+          if [ "$FILES_COUNT" -gt 10 ] || [ "$SECURITY_COUNT" -gt 0 ]; then
+            echo "model=claude-sonnet-4-6" >> "$GITHUB_OUTPUT"
+            echo "→ Sonnet (files=$FILES_COUNT, security=$SECURITY_COUNT)"
+          else
+            echo "model=claude-haiku-4-5-20251001" >> "$GITHUB_OUTPUT"
+            echo "→ Haiku (files=$FILES_COUNT, security=$SECURITY_COUNT)"
+          fi
+
+      - name: Delete previous Claude review comments
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REPO: ${{ github.repository }}
+        run: |
+          if [ "${{ github.event_name }}" = "pull_request" ]; then
+            PR_NUMBER="${{ github.event.pull_request.number }}"
+          else
+            PR_NUMBER="${{ github.event.issue.number }}"
+          fi
+
+          curl -s \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            "https://api.github.com/repos/${REPO}/issues/${PR_NUMBER}/comments?per_page=100" \
+          | jq -r '.[] | select(.body | contains("<!-- claude-pr-review -->")) | .id' \
+          | while read -r comment_id; do
+              curl -s -X DELETE \
+                -H "Authorization: Bearer $GH_TOKEN" \
+                -H "Accept: application/vnd.github+json" \
+                "https://api.github.com/repos/${REPO}/issues/comments/${comment_id}"
+              echo "Deleted previous review: $comment_id"
+            done
+
+      - uses: anthropics/claude-code-action@beta
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          direct_prompt: |
+            このPRのコードをレビューし、以下のフォーマットでPRにコメントを1件投稿してください。
+
+            コメントの**冒頭1行目**は必ず次の識別子を含めてください（HTMLコメントのため表示されません）:
+            <!-- claude-pr-review -->
+
+            ## レビュー項目
+            1. **バグ・ロジックエラー**: 動作上の問題になりうる箇所
+            2. **型安全性**: TypeScriptの型エラーや型の緩い使用
+            3. **セキュリティ**: 脆弱性・入力検証漏れ・権限チェック漏れ
+            4. **パフォーマンス**: 不必要なレンダリング・N+1クエリ・重い処理
+            5. **コード品質**: 可読性・命名・重複コード・不要なコメント
+
+            ## 出力フォーマット
+            - 1行目: `<!-- claude-pr-review -->`
+            - 問題がなければ「✅ レビュー完了: 問題ありません」と記載
+            - 問題がある場合は深刻度（🔴 重大 / 🟡 軽微 / 🔵 提案）を付けて記載
+            - 各指摘にはファイル名と行番号を含める
+            - 称賛・挨拶・まとめは不要
+            - 「---」による区切りは使用しない
+            - レビュー内容を重要度が高い順に並び替える
+
+          model: ${{ steps.model.outputs.model }}
+          max_turns: "3"

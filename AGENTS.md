@@ -4,13 +4,13 @@
 
 ## プロジェクト概要
 
-**meet-moc** — イベントの日程調整・出欠確認 Web アプリ。
+**mixkan** — イベントの日程調整・出欠確認 Web アプリ。
 
 - **フレームワーク**: Next.js (App Router)
 - **ORM**: Prisma
 - **DB**: PostgreSQL
 - **言語**: TypeScript
-- **リポジトリ**: `Meet-develop/meet-moc`
+- **リポジトリ**: `Meet-develop/mixkan`
 - **デフォルトブランチ**: `develop`（main はリリース用）
 
 ## ブランチ命名規則

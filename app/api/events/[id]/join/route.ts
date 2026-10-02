@@ -2,47 +2,11 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { syncApprovedEventFriendships } from "@/lib/event-friendships";
 import { createAppNotification } from "@/lib/notification-delivery";
+import {
+  shouldAutoApprove,
+} from "@/lib/event-approval";
 
-const needsOwnerApprovalByDeadline = (event: {
-  scheduleMode: "fixed" | "candidate";
-  status: "open" | "confirmed" | "completed" | "cancelled";
-  fixedStartTime: Date | null;
-  timeCandidates: Array<{ startTime: Date }>;
-}) => {
-  const now = Date.now();
 
-  if (event.status === "cancelled") {
-    return true;
-  }
-
-  if (event.scheduleMode === "fixed") {
-    if (!event.fixedStartTime) {
-      return false;
-    }
-    const deadline = new Date(event.fixedStartTime);
-    deadline.setDate(deadline.getDate() - 1);
-    return now > deadline.getTime();
-  }
-
-  if (event.status !== "open") {
-    return true;
-  }
-
-  const candidateStarts = event.timeCandidates
-    .map((candidate) => candidate.startTime.getTime())
-    .filter((timestamp) => Number.isFinite(timestamp));
-
-  const firstStart =
-    event.fixedStartTime != null
-      ? event.fixedStartTime.getTime()
-      : candidateStarts.length > 0
-        ? Math.min(...candidateStarts)
-        : now + 7 * 24 * 60 * 60 * 1000;
-
-  const deadline = new Date(firstStart);
-  deadline.setDate(deadline.getDate() - 1);
-  return now > deadline.getTime();
-};
 
 export async function POST(
   request: Request,
@@ -91,16 +55,20 @@ export async function POST(
   const isInvitedByOwner =
     pendingInvite && pendingInvite.inviterId === event.ownerId;
 
-  const overCapacity = approvedCount >= event.capacity;
-  const requiresApprovalByDeadline = needsOwnerApprovalByDeadline(event);
-  const requiresApprovalByVisibility =
-    (event.visibility === "limited" || event.visibility === "private") &&
-    !isInvitedByOwner;
+  const shouldAuto = shouldAutoApprove(
+    {
+      scheduleMode: event.scheduleMode,
+      status: event.status,
+      fixedStartTime: event.fixedStartTime,
+      timeCandidates: event.timeCandidates ?? [],
+      visibility: event.visibility,
+      capacity: event.capacity,
+    },
+    Boolean(isInvitedByOwner),
+    approvedCount
+  );
 
-  const shouldAutoApprove =
-    !overCapacity && !requiresApprovalByDeadline && !requiresApprovalByVisibility;
-
-  const nextStatus = shouldAutoApprove ? "approved" : "requested";
+  const nextStatus = shouldAuto ? "approved" : "requested";
 
   if (pendingInvite) {
     await prisma.eventInvite.update({

@@ -18,7 +18,7 @@ Issue・PR の本文は `.github/` のテンプレートを参照すること。
 
 - `gh` CLI がインストール・認証済みであること
 - ベースブランチ: `develop`
-- リポジトリ: `Meet-develop/meet-moc`
+- リポジトリ: `Meet-develop/mixkan`
 
 ## Phase 1 — Issue 作成
 

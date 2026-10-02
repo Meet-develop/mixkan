@@ -15,7 +15,7 @@ allowed-tools:
 ## 前提条件
 
 - 作業ブランチが remote にプッシュ済みであること（未プッシュなら `git push -u origin <branch>` を実行）
-- リポジトリ: `Meet-develop/meet-moc`
+- リポジトリ: `Meet-develop/mixkan`
 - ベースブランチ: `develop`
 
 ## Step 1 — 変更内容を把握する
@@ -40,7 +40,7 @@ cat "$REPO_ROOT/.github/PULL_REQUEST_TEMPLATE.md"
 
 ```bash
 gh pr create \
-  --repo Meet-develop/meet-moc \
+  --repo Meet-develop/mixkan \
   --base develop \
   --head <branch-name> \
   --title "<PRタイトル>" \
@@ -51,5 +51,5 @@ gh pr create \
 
 ```
 PR_NUMBER=66
-PR_URL=https://github.com/Meet-develop/meet-moc/pull/66
+PR_URL=https://github.com/Meet-develop/mixkan/pull/66
 ```

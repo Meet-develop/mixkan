@@ -1,4 +1,4 @@
-# meet-moc
+# mixkan
 
 飲み会・ごはん会などのイベント作成、参加、招待、通知を行う Next.js アプリです。
 
@@ -57,7 +57,7 @@ docker compose exec app npm run db:seed
 4. アクセス先
 
 - App: http://localhost:3000
-- Postgres: localhost:5432（db: meet_moc, user: postgres, password: postgres）
+- Postgres: localhost:5432（db: mixkan, user: postgres, password: postgres）
 
 停止:
 
@@ -70,8 +70,8 @@ docker compose down
 `docker-compose.yml` では、アプリコンテナのDB接続先をローカルDBへ固定しています。
 
 ```yml
-DATABASE_URL: "postgresql://postgres:postgres@db:5432/meet_moc"
-DIRECT_URL: "postgresql://postgres:postgres@db:5432/meet_moc"
+DATABASE_URL: "postgresql://postgres:postgres@db:5432/mixkan"
+DIRECT_URL: "postgresql://postgres:postgres@db:5432/mixkan"
 ```
 
 - つまり、ローカルの `docker compose up` では Supabase PostgreSQL に接続しません。

@@ -212,7 +212,6 @@ export async function GET(
       })
     )
   )
-    .sort((a: any, b: any) => b.score - a.score)
     .slice(0, 5);
 
   const eventArea = (event as { area?: string | null }).area ?? null;

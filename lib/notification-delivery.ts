@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { getAppOrigin } from "@/lib/site-url";
 
 type NotificationPayload = {
   userId: string;
@@ -8,9 +9,6 @@ type NotificationPayload = {
   message: string;
   eventId?: string | null;
 };
-
-const getAppOrigin = () =>
-  process.env.APP_ORIGIN?.trim() || process.env.NEXT_PUBLIC_APP_ORIGIN?.trim() || "";
 
 const buildLineMessage = (payload: NotificationPayload) => {
   const title = payload.title?.trim() || "お知らせ";

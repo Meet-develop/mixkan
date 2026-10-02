@@ -407,7 +407,7 @@ export default function EventManagePage() {
               <p className="mt-4 text-sm text-[var(--muted)]">お店候補はありません。</p>
             ) : (
               <ul className="mt-4 space-y-3">
-                {event.placeCandidates.map((candidate) => (
+                {[...event.placeCandidates].sort((a, b) => b.score - a.score).map((candidate) => (
                   <li
                     key={candidate.id}
                     className={`rounded-2xl p-4 text-sm shadow-sm ${

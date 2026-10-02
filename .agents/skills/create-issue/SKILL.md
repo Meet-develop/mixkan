@@ -15,7 +15,7 @@ allowed-tools:
 ## 前提条件
 
 - `gh` CLI がインストール・認証済みであること
-- リポジトリ: `Meet-develop/meet-moc`
+- リポジトリ: `Meet-develop/mixkan`
 
 ## Step 1 — Issue の種類を判断する
 
@@ -47,7 +47,7 @@ MCP の `mcp__github__create_issue` ツールを使用する（設定済みの�
 
 ```bash
 gh issue create \
-  --repo Meet-develop/meet-moc \
+  --repo Meet-develop/mixkan \
   --title "[FEAT] <タイトル>" \
   --label "enhancement" \
   --body "<Step 2 で生成したテンプレート本文>"
@@ -59,7 +59,7 @@ gh issue create \
 
 ```
 ISSUE_NUMBER=65
-ISSUE_URL=https://github.com/Meet-develop/meet-moc/issues/65
+ISSUE_URL=https://github.com/Meet-develop/mixkan/issues/65
 ```
 
 この番号を後続のブランチ作成・PR 作成で使用する。
