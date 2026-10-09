@@ -152,8 +152,8 @@ export async function POST(
           role: "member",
         },
       });
-    } catch {
-      // コミュニティ所属処理の失敗で参加全体を落とさない
+    } catch (error) {
+      console.error("[events/join] Failed to auto-join community:", error);
     }
   }
 

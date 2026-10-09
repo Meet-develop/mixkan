@@ -120,6 +120,7 @@ export default function FriendsPage() {
               <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
                 <button
                   type="button"
+                  aria-pressed={selectedCommunityFilter === "all"}
                   onClick={() => setSelectedCommunityFilter("all")}
                   className={`rounded-full px-3 py-1.5 text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer ${
                     selectedCommunityFilter === "all"
@@ -133,6 +134,7 @@ export default function FriendsPage() {
                   <button
                     key={comm.id}
                     type="button"
+                    aria-pressed={selectedCommunityFilter === comm.id}
                     onClick={() => setSelectedCommunityFilter(comm.id)}
                     className={`inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer ${
                       selectedCommunityFilter === comm.id
