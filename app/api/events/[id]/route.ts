@@ -279,7 +279,7 @@ export async function PATCH(
     eventArea?: string;
     visibility?: "public" | "limited" | "private";
     capacity?: number;
-    timeSetting?: "auto" | "manual";
+    timeSetting?: "auto" | "candidates" | "manual";
     placeSetting?: "auto" | "manual";
     fixedStartTime?: string;
     fixedPlace?: {
@@ -288,6 +288,10 @@ export async function PATCH(
       address?: string;
     } | null;
     placeQuery?: string;
+    userTimeCandidates?: {
+      startTime: string;
+      endTime: string;
+    }[];
     candidatePlaces?: {
       placeId: string;
       name: string;
@@ -300,6 +304,16 @@ export async function PATCH(
 
   if (!body.ownerId) {
     return NextResponse.json({ message: "Missing ownerId" }, { status: 400 });
+  }
+
+  if (
+    body.timeSetting === "candidates" &&
+    (!body.userTimeCandidates || body.userTimeCandidates.length === 0)
+  ) {
+    return NextResponse.json(
+      { message: "userTimeCandidates must not be empty when timeSetting is candidates" },
+      { status: 400 }
+    );
   }
 
   const event = await prisma.event.findUnique({
@@ -334,7 +348,9 @@ export async function PATCH(
   } = {};
 
   const hasTimeSetting =
-    body.timeSetting === "auto" || body.timeSetting === "manual";
+    body.timeSetting === "auto" ||
+    body.timeSetting === "candidates" ||
+    body.timeSetting === "manual";
   const hasPlaceSetting =
     body.placeSetting === "auto" || body.placeSetting === "manual";
   const hasFixedPlacePayload = body.fixedPlace !== undefined;
@@ -407,7 +423,7 @@ export async function PATCH(
     updateData.fixedEndTime = new Date(
       fixedStartTime.getTime() + 2 * 60 * 60 * 1000
     );
-  } else if (hasTimeSetting && body.timeSetting === "auto") {
+  } else if (hasTimeSetting && (body.timeSetting === "auto" || body.timeSetting === "candidates")) {
     updateData.fixedStartTime = null;
     updateData.fixedEndTime = null;
   }
@@ -416,12 +432,18 @@ export async function PATCH(
     updateData.scheduleMode = derivedScheduleMode;
   }
 
+  const isTimeCandidatesMode = body.timeSetting === "candidates";
   const shouldRegenerateTimeCandidates =
     nextTimeSetting === "auto" &&
     (currentTimeSetting === "manual" || event.timeCandidates.length === 0);
+  const shouldReplaceWithUserCandidates =
+    isTimeCandidatesMode &&
+    body.userTimeCandidates != null &&
+    body.userTimeCandidates.length > 0;
   const shouldDeleteTimeCandidates =
     (hasTimeSetting && body.timeSetting === "manual") ||
-    shouldRegenerateTimeCandidates;
+    shouldRegenerateTimeCandidates ||
+    shouldReplaceWithUserCandidates;
 
   const shouldRegeneratePlaceCandidates =
     nextPlaceSetting === "auto" &&
@@ -522,10 +544,21 @@ export async function PATCH(
     });
   }
 
-  if (shouldDeleteTimeCandidates) {
-    await prisma.eventTimeCandidate.deleteMany({
-      where: { eventId: id },
+  if (shouldDeleteTimeCandidates && shouldReplaceWithUserCandidates && body.userTimeCandidates) {
+    const parsedCandidates = body.userTimeCandidates.slice(0, 10).map((c) => {
+      const start = new Date(c.startTime);
+      const end = new Date(c.endTime);
+      if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+        throw new Error(`Invalid date in userTimeCandidates: ${JSON.stringify(c)}`);
+      }
+      return { eventId: id, startTime: start, endTime: end, score: 0, source: "system" as const };
     });
+    await prisma.$transaction([
+      prisma.eventTimeCandidate.deleteMany({ where: { eventId: id } }),
+      prisma.eventTimeCandidate.createMany({ data: parsedCandidates }),
+    ]);
+  } else if (shouldDeleteTimeCandidates) {
+    await prisma.eventTimeCandidate.deleteMany({ where: { eventId: id } });
   }
 
   if (shouldRegenerateTimeCandidates) {

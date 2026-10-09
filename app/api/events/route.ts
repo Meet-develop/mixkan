@@ -322,7 +322,7 @@ export async function POST(request: Request) {
     visibility?: "public" | "limited" | "private";
     capacity?: number;
     scheduleMode?: "fixed" | "candidate";
-    timeSetting?: "auto" | "manual";
+    timeSetting?: "auto" | "candidates" | "manual";
     placeSetting?: "auto" | "manual";
     fixedStartTime?: string;
     fixedPlace?: {
@@ -331,6 +331,10 @@ export async function POST(request: Request) {
       address: string;
     };
     placeQuery?: string;
+    userTimeCandidates?: {
+      startTime: string;
+      endTime: string;
+    }[];
     candidatePlaces?: {
       placeId: string;
       name: string;
@@ -353,6 +357,7 @@ export async function POST(request: Request) {
   const isTimeManual = body.timeSetting
     ? body.timeSetting === "manual"
     : legacyFixed;
+  const isTimeCandidates = body.timeSetting === "candidates";
   const isPlaceManual = body.placeSetting
     ? body.placeSetting === "manual"
     : legacyFixed;
@@ -362,6 +367,13 @@ export async function POST(request: Request) {
   if (isTimeManual && !body.fixedStartTime) {
     return NextResponse.json(
       { message: "fixedStartTime is required when timeSetting is manual" },
+      { status: 400 }
+    );
+  }
+
+  if (isTimeCandidates && (!body.userTimeCandidates || body.userTimeCandidates.length === 0)) {
+    return NextResponse.json(
+      { message: "userTimeCandidates must not be empty when timeSetting is candidates" },
       { status: 400 }
     );
   }
@@ -505,36 +517,48 @@ export async function POST(request: Request) {
 
   if (resolvedScheduleMode === "candidate") {
     if (!isTimeManual) {
-      let inviteeAvailabilities: unknown[] = [];
-      if (inviteeIds.length > 0) {
-        const inviteeProfiles = await prisma.profile.findMany({
-          where: {
-            userId: {
-              in: inviteeIds,
-            },
-          },
-          select: {
-            availability: true,
-          },
+      if (isTimeCandidates && body.userTimeCandidates && body.userTimeCandidates.length > 0) {
+        const parsedCandidates = body.userTimeCandidates.slice(0, 10).map((c) => {
+          const start = new Date(c.startTime);
+          const end = new Date(c.endTime);
+          if (isNaN(start.getTime()) || isNaN(end.getTime())) {
+            throw new Error(`Invalid date in userTimeCandidates: ${JSON.stringify(c)}`);
+          }
+          return { eventId: event.id, startTime: start, endTime: end, score: 0, source: "system" as const };
         });
-        inviteeAvailabilities = inviteeProfiles.map((profile) => profile.availability);
+        await prisma.eventTimeCandidate.createMany({ data: parsedCandidates });
+      } else if (!isTimeCandidates) {
+        let inviteeAvailabilities: unknown[] = [];
+        if (inviteeIds.length > 0) {
+          const inviteeProfiles = await prisma.profile.findMany({
+            where: {
+              userId: {
+                in: inviteeIds,
+              },
+            },
+            select: {
+              availability: true,
+            },
+          });
+          inviteeAvailabilities = inviteeProfiles.map((profile) => profile.availability);
+        }
+
+        const dayPriorityByWeekday = buildDayPriorityByWeekday([
+          ownerProfile?.availability,
+          ...inviteeAvailabilities,
+        ]);
+
+        const timeCandidates = buildDefaultTimeCandidates(
+          ownerProfile?.availability as AvailabilityInput | undefined,
+          dayPriorityByWeekday
+        );
+        await prisma.eventTimeCandidate.createMany({
+          data: timeCandidates.map((candidate: any) => ({
+            eventId: event.id,
+            ...candidate,
+          })),
+        });
       }
-
-      const dayPriorityByWeekday = buildDayPriorityByWeekday([
-        ownerProfile?.availability,
-        ...inviteeAvailabilities,
-      ]);
-
-      const timeCandidates = buildDefaultTimeCandidates(
-        ownerProfile?.availability as AvailabilityInput | undefined,
-        dayPriorityByWeekday
-      );
-      await prisma.eventTimeCandidate.createMany({
-        data: timeCandidates.map((candidate: any) => ({
-          eventId: event.id,
-          ...candidate,
-        })),
-      });
     }
 
     if (!isPlaceManual) {

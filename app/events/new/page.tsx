@@ -48,6 +48,7 @@ type EventEditResponse = {
   owner: {
     userId: string;
   };
+  timeCandidates: { startTime: string; endTime: string }[];
   placeCandidates: PlaceResult[];
 };
 
@@ -57,14 +58,21 @@ type EventUpdateComparable = {
   eventArea: string;
   visibility: "public" | "limited" | "private";
   capacity: number;
-  timeSetting: "auto" | "manual";
+  timeSetting: "auto" | "candidates" | "manual";
   placeSetting: "auto" | "manual";
   fixedStartTime: string | null;
+  candidateStartTimes: string;
   fixedPlace: {
     placeId: string;
     name: string;
     address: string;
   } | null;
+};
+
+type TimeCandidate = {
+  id: string;
+  startTime: string;
+  endTime: string;
 };
 
 type Step = 1 | 2 | 3 | 4 | 5 | 6;
@@ -94,7 +102,18 @@ const purposeElementOptions = [
   "少人数",
 ];
 
-const settingOptions: Array<{
+const timeSettingOptions: Array<{
+  value: "auto" | "candidates" | "manual";
+  label: string;
+  caption: string;
+  recommended?: boolean;
+}> = [
+  { value: "auto", label: "おまかせ", caption: "直近の日程を自動で提案", recommended: true },
+  { value: "candidates", label: "日程候補を設定する", caption: "日程の選択肢を手動で追加" },
+  { value: "manual", label: "固定", caption: "既に確定している日程を設定" },
+];
+
+const placeSettingOptions: Array<{
   value: "auto" | "manual";
   label: string;
   caption: string;
@@ -106,6 +125,21 @@ const settingOptions: Array<{
 
 const plusButtonClass =
   "grid h-7 w-7 place-items-center rounded-full border border-dashed border-gray-400 bg-gray-50 text-gray-500";
+
+const JST_OFFSET_MS = 9 * 60 * 60 * 1000;
+const WEEKDAY_LABELS = ["日", "月", "火", "水", "木", "金", "土"] as const;
+
+const formatCandidateStart = (isoString: string) => {
+  const jst = new Date(new Date(isoString).getTime() + JST_OFFSET_MS);
+  const month = jst.getUTCMonth() + 1;
+  const day = jst.getUTCDate();
+  const weekday = WEEKDAY_LABELS[jst.getUTCDay()];
+  const h = String(jst.getUTCHours()).padStart(2, "0");
+  const m = String(jst.getUTCMinutes()).padStart(2, "0");
+  return `${month}月${day}日 (${weekday}) ${h}:${m}〜`;
+};
+
+const generateId = () => Math.random().toString(36).slice(2);
 
 const buildAutoTitle = (elements: string[]) => {
   if (elements.length === 0) return "";
@@ -151,6 +185,11 @@ const buildComparableFromEvent = (event: EventEditResponse): EventUpdateComparab
   const hasFixedPlace = Boolean(
     event.fixedPlaceId && event.fixedPlaceName && event.fixedPlaceAddress
   );
+  const resolvedTimeSetting: "auto" | "candidates" | "manual" = hasFixedStart
+    ? "manual"
+    : event.timeCandidates.length > 0
+      ? "candidates"
+      : "auto";
 
   return {
     purpose: toComparableText(event.purpose),
@@ -158,9 +197,10 @@ const buildComparableFromEvent = (event: EventEditResponse): EventUpdateComparab
     eventArea: toComparableText(event.area),
     visibility: event.visibility,
     capacity: normalizeCapacity(event.capacity),
-    timeSetting: hasFixedStart ? "manual" : "auto",
+    timeSetting: resolvedTimeSetting,
     placeSetting: hasFixedPlace ? "manual" : "auto",
     fixedStartTime: hasFixedStart ? toDatetimeLocalValue(event.fixedStartTime) : null,
+    candidateStartTimes: [...event.timeCandidates.map((c) => c.startTime)].sort().join(","),
     fixedPlace: hasFixedPlace
       ? {
           placeId: toComparableText(event.fixedPlaceId),
@@ -212,9 +252,16 @@ function EventCreatePageContent() {
   const [isAreaOverlayOpen, setIsAreaOverlayOpen] = useState(false);
   const [areaMessage, setAreaMessage] = useState<string | null>(null);
 
-  const [timeSetting, setTimeSetting] = useState<"auto" | "manual">("auto");
+  const [timeSetting, setTimeSetting] = useState<"auto" | "candidates" | "manual">("auto");
   const [placeSetting, setPlaceSetting] = useState<"auto" | "manual">("auto");
   const [fixedStart, setFixedStart] = useState("");
+  const [activeCandidates, setActiveCandidates] = useState<TimeCandidate[]>([]);
+  const [suggestionPool, setSuggestionPool] = useState<TimeCandidate[]>([]);
+  const [isSuggestionsLoading, setIsSuggestionsLoading] = useState(false);
+  const [isSuggestionsError, setIsSuggestionsError] = useState(false);
+  const [suggestionRetryCount, setSuggestionRetryCount] = useState(0);
+  const [manualDateInput, setManualDateInput] = useState("");
+  const [showManualDateInput, setShowManualDateInput] = useState(false);
   const [selectedPlace, setSelectedPlace] = useState<PlaceResult | null>(null);
   const [candidatePlaces, setCandidatePlaces] = useState<PlaceResult[]>([]);
   const [eventComment, setEventComment] = useState("");
@@ -234,6 +281,7 @@ function EventCreatePageContent() {
   const [submitMessage, setSubmitMessage] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const submitLockRef = useRef(false);
+  const hasFetchedSuggestionsRef = useRef(false);
 
   const purposeSectionRef = useRef<HTMLElement | null>(null);
   const visibilitySectionRef = useRef<HTMLElement | null>(null);
@@ -331,9 +379,21 @@ function EventCreatePageContent() {
       if (fixedStart) {
         setTimeSetting("manual");
         setFixedStart(fixedStart);
+        setActiveCandidates([]);
+      } else if (event.timeCandidates && event.timeCandidates.length > 0) {
+        setTimeSetting("candidates");
+        setFixedStart("");
+        setActiveCandidates(
+          event.timeCandidates.map((c) => ({
+            id: generateId(),
+            startTime: c.startTime,
+            endTime: c.endTime,
+          }))
+        );
       } else {
         setTimeSetting("auto");
         setFixedStart("");
+        setActiveCandidates([]);
       }
 
       if (event.fixedPlaceName && event.fixedPlaceAddress && event.fixedPlaceId) {
@@ -363,6 +423,53 @@ function EventCreatePageContent() {
       active = false;
     };
   }, [editEventId, isEditMode, userId]);
+
+  useEffect(() => {
+    if (timeSetting !== "candidates" || !userId) return;
+    if (hasFetchedSuggestionsRef.current) return;
+
+    let active = true;
+    setIsSuggestionsLoading(true);
+    setIsSuggestionsError(false);
+
+    const loadSuggestions = async () => {
+      try {
+        const response = await fetch(
+          `/api/profiles/${encodeURIComponent(userId)}/time-suggestions`,
+          { cache: "no-store" }
+        );
+        if (!active) return;
+        if (response.ok) {
+          const data = (await response.json()) as {
+            defaults: { startTime: string; endTime: string }[];
+            suggestions: { startTime: string; endTime: string }[];
+          };
+          hasFetchedSuggestionsRef.current = true;
+          setActiveCandidates((prev) =>
+            prev.length === 0
+              ? data.defaults.map((c) => ({ id: generateId(), startTime: c.startTime, endTime: c.endTime }))
+              : prev
+          );
+          setSuggestionPool(
+            data.suggestions.map((c) => ({ id: generateId(), startTime: c.startTime, endTime: c.endTime }))
+          );
+        } else {
+          if (!active) return;
+          setIsSuggestionsError(true);
+        }
+      } catch {
+        if (!active) return;
+        setIsSuggestionsError(true);
+      } finally {
+        if (active) setIsSuggestionsLoading(false);
+      }
+    };
+
+    loadSuggestions();
+    return () => {
+      active = false;
+    };
+  }, [timeSetting, userId, suggestionRetryCount]);
 
   useEffect(() => {
     if (!userId) {
@@ -406,7 +513,20 @@ function EventCreatePageContent() {
     previousAutoTitleRef.current = autoTitle;
   }, [autoTitle, eventTitleInput, isTitleCustomized]);
 
-  const isTimeManualValid = timeSetting === "manual" ? Boolean(fixedStart) : true;
+  const allUserTimeCandidates = useMemo(
+    () => activeCandidates.map((c) => ({ startTime: c.startTime, endTime: c.endTime })),
+    [activeCandidates]
+  );
+
+  const MAX_TIME_CANDIDATES = 5;
+  const isCandidateFull = activeCandidates.length >= MAX_TIME_CANDIDATES;
+
+  const isTimeManualValid =
+    timeSetting === "manual"
+      ? Boolean(fixedStart)
+      : timeSetting === "candidates"
+        ? allUserTimeCandidates.length > 0
+        : true;
   const isPlaceManualValid = placeSetting === "manual" ? Boolean(selectedPlace) : true;
   const derivedScheduleMode: "fixed" | "candidate" =
     timeSetting === "manual" && placeSetting === "manual" ? "fixed" : "candidate";
@@ -422,6 +542,10 @@ function EventCreatePageContent() {
       timeSetting,
       placeSetting,
       fixedStartTime: timeSetting === "manual" ? fixedStart : null,
+      candidateStartTimes:
+        timeSetting === "candidates"
+          ? [...activeCandidates.map((c) => c.startTime)].sort().join(",")
+          : "",
       fixedPlace:
         placeSetting === "manual" && selectedPlace
           ? {
@@ -431,7 +555,7 @@ function EventCreatePageContent() {
             }
           : null,
     }),
-    [capacity, eventComment, fixedStart, placeSetting, resolvedTitle, selectedEventArea, selectedPlace, timeSetting, visibility]
+    [activeCandidates, capacity, eventComment, fixedStart, placeSetting, resolvedTitle, selectedEventArea, selectedPlace, timeSetting, visibility]
   );
 
   const hasEditChanges = useMemo(() => {
@@ -462,6 +586,12 @@ function EventCreatePageContent() {
     }
     if (timeSetting === "manual") {
       return "日程は固定し、場所は候補から決定します。";
+    }
+    if (timeSetting === "candidates" && placeSetting === "manual") {
+      return "日程候補を設定し、場所は固定して作成します。";
+    }
+    if (timeSetting === "candidates") {
+      return "日程候補から参加者と日程を決定します。";
     }
     if (placeSetting === "manual") {
       return "場所は固定し、日程は候補から決定します。";
@@ -685,6 +815,7 @@ function EventCreatePageContent() {
         timeSetting,
         placeSetting,
         fixedStartTime: normalizedFixedStart,
+        userTimeCandidates: timeSetting === "candidates" ? allUserTimeCandidates : undefined,
         fixedPlace:
           placeSetting === "manual" && selectedPlace
             ? {
@@ -1186,9 +1317,199 @@ function EventCreatePageContent() {
 
             {(!isFocusMode || capacityTouched) && (
               <section className="rounded-3xl bg-white p-4 shadow-sm">
+                <h2 className="text-sm font-semibold">日程の設定</h2>
+                <p className="mt-1 text-xs text-[var(--muted)]">
+                  日程の決め方を選択してください。
+                </p>
+                <div className="mt-3 space-y-2">
+                  {timeSettingOptions.map((mode) => (
+                    <button
+                      key={mode.value}
+                      onClick={() => setTimeSetting(mode.value)}
+                      className={`flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left ${
+                        timeSetting === mode.value
+                          ? "bg-orange-50 shadow-md"
+                          : "bg-white shadow-sm"
+                      }`}
+                    >
+                      <div>
+                        <p className="text-sm font-semibold">{mode.label}</p>
+                        <p className="text-xs text-[var(--muted)]">{mode.caption}</p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {mode.recommended && (
+                          <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
+                            推奨
+                          </span>
+                        )}
+                        <span className="text-xs font-semibold text-[var(--muted)]">
+                          {timeSetting === mode.value ? "選択中" : "未選択"}
+                        </span>
+                      </div>
+                    </button>
+                  ))}
+                </div>
+
+                {timeSetting === "candidates" && (
+                  <div className="mt-4 space-y-4">
+                    {/* 日程候補 */}
+                    <div>
+                      <p className="mb-2 text-xs font-semibold text-[var(--foreground)]">日程候補</p>
+                      {isSuggestionsLoading ? (
+                        <p className="text-xs text-[var(--muted)]">候補を取得中...</p>
+                      ) : isSuggestionsError ? (
+                        <div className="space-y-2">
+                          <p className="text-xs text-rose-500">
+                            日程候補の取得に失敗しました。提案候補が表示されない場合は、日程を手動で追加してください。
+                          </p>
+                          <button
+                            onClick={() => {
+                              setIsSuggestionsError(false);
+                              setSuggestionRetryCount((c) => c + 1);
+                            }}
+                            className="text-xs text-[var(--accent)] underline"
+                          >
+                            再試行する
+                          </button>
+                        </div>
+                      ) : activeCandidates.length === 0 ? (
+                        <p className="text-xs text-[var(--muted)]">
+                          候補がありません。下の「提案候補」から選択するか、日程を手動追加してください。
+                        </p>
+                      ) : (
+                        <div className="space-y-2">
+                          {activeCandidates.map((candidate) => (
+                            <div
+                              key={candidate.id}
+                              className="flex items-center justify-between rounded-2xl bg-orange-50 px-4 py-3 shadow-sm"
+                            >
+                              <span className="text-sm">{formatCandidateStart(candidate.startTime)}</span>
+                              <button
+                                onClick={() =>
+                                  setActiveCandidates((prev) => prev.filter((c) => c.id !== candidate.id))
+                                }
+                                className="grid h-6 w-6 flex-shrink-0 place-items-center rounded-full bg-white text-[var(--muted)] shadow-sm"
+                                aria-label="削除"
+                              >
+                                <span className="material-symbols-rounded text-sm">close</span>
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {activeCandidates.length === 0 && !isSuggestionsLoading && (
+                        <p className="mt-1 text-xs text-rose-500">
+                          候補を1件以上追加してください。
+                        </p>
+                      )}
+                    </div>
+
+                    {/* 提案候補 */}
+                    {!isSuggestionsLoading && suggestionPool.length > 0 && (
+                      <div>
+                        <p className="mb-2 text-xs font-semibold text-[var(--foreground)]">提案候補</p>
+                        {isCandidateFull && (
+                          <p className="mb-2 text-xs text-[var(--muted)]">
+                            日程候補が{MAX_TIME_CANDIDATES}件に達したため追加できません。
+                          </p>
+                        )}
+                        <div className="space-y-2">
+                          {suggestionPool.map((candidate) => (
+                            <button
+                              key={candidate.id}
+                              disabled={isCandidateFull}
+                              onClick={() => {
+                                if (isCandidateFull) return;
+                                setSuggestionPool((prev) => prev.filter((c) => c.id !== candidate.id));
+                                setActiveCandidates((prev) => [...prev, candidate]);
+                              }}
+                              className={`flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left shadow-sm ${
+                                isCandidateFull
+                                  ? "cursor-not-allowed bg-gray-50 opacity-50"
+                                  : "bg-white"
+                              }`}
+                            >
+                              <span className="text-sm">{formatCandidateStart(candidate.startTime)}</span>
+                              <span className="material-symbols-rounded text-sm text-[var(--muted)]">add</span>
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* 手動追加 */}
+                    <div>
+                      {showManualDateInput ? (
+                        <div className="flex flex-col gap-2">
+                          <input
+                            type="datetime-local"
+                            value={manualDateInput}
+                            onChange={(e) => setManualDateInput(e.target.value)}
+                            className="rounded-2xl bg-white px-4 py-3 text-sm shadow-sm"
+                          />
+                          <div className="flex gap-2">
+                            <button
+                              onClick={() => {
+                                if (!manualDateInput || isCandidateFull) return;
+                                const start = new Date(manualDateInput);
+                                const end = new Date(start.getTime() + 2 * 60 * 60 * 1000);
+                                setActiveCandidates((prev) => [
+                                  ...prev,
+                                  { id: generateId(), startTime: start.toISOString(), endTime: end.toISOString() },
+                                ]);
+                                setManualDateInput("");
+                                setShowManualDateInput(false);
+                              }}
+                              disabled={!manualDateInput || isCandidateFull}
+                              className="flex-1 rounded-full bg-[var(--accent)] px-4 py-2 text-xs font-semibold text-white disabled:opacity-50"
+                            >
+                              追加
+                            </button>
+                            <button
+                              onClick={() => { setManualDateInput(""); setShowManualDateInput(false); }}
+                              className="flex-1 rounded-full bg-white px-4 py-2 text-xs font-semibold text-[var(--muted)] shadow-sm"
+                            >
+                              キャンセル
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <button
+                          onClick={() => setShowManualDateInput(true)}
+                          disabled={isCandidateFull}
+                          className={`flex items-center gap-1 rounded-full px-4 py-2 text-xs font-semibold shadow-sm ${
+                            isCandidateFull
+                              ? "cursor-not-allowed bg-gray-50 text-gray-400 opacity-50"
+                              : "bg-white text-[var(--muted)]"
+                          }`}
+                        >
+                          <span className="material-symbols-rounded text-sm">add</span>
+                          日程を手動追加{isCandidateFull ? "（上限に達しました）" : ""}
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                )}
+
+                {timeSetting === "manual" && (
+                  <label className="mt-3 flex flex-col gap-2 text-sm">
+                    開始日時
+                    <input
+                      type="datetime-local"
+                      value={fixedStart}
+                      onChange={(event) => setFixedStart(event.target.value)}
+                      className="rounded-2xl bg-white px-4 py-3 shadow-sm"
+                    />
+                  </label>
+                )}
+              </section>
+            )}
+
+            {(!isFocusMode || capacityTouched) && (
+              <section className="rounded-3xl bg-white p-4 shadow-sm">
                 <h2 className="text-sm font-semibold">詳細設定（任意）</h2>
                 <p className="mt-1 text-xs text-[var(--muted)]">
-                  日程・場所を手動設定したい場合のみ選択してください。
+                  場所を手動設定したい場合のみ選択してください。
                 </p>
 
                 <label className="mt-4 block text-sm">
@@ -1201,53 +1522,10 @@ function EventCreatePageContent() {
                   />
                 </label>
 
-                <div className="mt-4">
-                  <p className="mb-2 text-sm font-medium">日程の設定</p>
-                  <div className="space-y-2">
-                    {settingOptions.map((mode) => (
-                      <button
-                        key={mode.value}
-                        onClick={() => setTimeSetting(mode.value)}
-                        className={`flex w-full items-center justify-between rounded-2xl px-4 py-3 text-left ${
-                          timeSetting === mode.value
-                            ? "bg-orange-50 shadow-md"
-                            : "bg-white shadow-sm"
-                        }`}
-                      >
-                        <div>
-                          <p className="text-sm font-semibold">{mode.label}</p>
-                          <p className="text-xs text-[var(--muted)]">{mode.caption}</p>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {mode.recommended && (
-                            <span className="rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-semibold text-amber-700">
-                              推奨
-                            </span>
-                          )}
-                          <span className="text-xs font-semibold text-[var(--muted)]">
-                            {timeSetting === mode.value ? "選択中" : "未選択"}
-                          </span>
-                        </div>
-                      </button>
-                    ))}
-                  </div>
-                  {timeSetting === "manual" && (
-                    <label className="mt-3 flex flex-col gap-2 text-sm">
-                      開始日時
-                      <input
-                        type="datetime-local"
-                        value={fixedStart}
-                        onChange={(event) => setFixedStart(event.target.value)}
-                        className="rounded-2xl bg-white px-4 py-3 shadow-sm"
-                      />
-                    </label>
-                  )}
-                </div>
-
                 <div className="mt-5">
                   <p className="mb-2 text-sm font-medium">場所の設定</p>
                   <div className="space-y-2">
-                    {settingOptions.map((mode) => (
+                    {placeSettingOptions.map((mode) => (
                       <button
                         key={`place-${mode.value}`}
                         onClick={() => setPlaceSetting(mode.value)}

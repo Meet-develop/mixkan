@@ -107,7 +107,8 @@ export const buildDayPriorityByWeekday = (availabilities: unknown[]) => {
 };
 
 const pickTopTimeCandidates = (
-  pool: Array<TimeCandidateInput & { dayKey: WeekdayKey; priority: number }>
+  pool: Array<TimeCandidateInput & { dayKey: WeekdayKey; priority: number }>,
+  limit: number = 3
 ) =>
   pool
     .sort((a, b) => {
@@ -116,7 +117,7 @@ const pickTopTimeCandidates = (
       }
       return a.startTime.getTime() - b.startTime.getTime();
     })
-    .slice(0, 3)
+    .slice(0, limit)
     .map(({ startTime, endTime, score, source }) => ({
       startTime,
       endTime,
@@ -127,7 +128,10 @@ const pickTopTimeCandidates = (
 export const buildDefaultTimeCandidates = (
   availability?: AvailabilityInput,
   dayPriorityByWeekday?: Record<WeekdayKey, number>,
-  baseNow: Date = new Date()
+  baseNow: Date = new Date(),
+  minOffset: number = MIN_CANDIDATE_OFFSET_DAYS,
+  maxCandidates: number = 3,
+  windowDays: number = 28
 ) => {
   const weekdaySlots = availability?.weekdaySlots;
   const candidates: Array<TimeCandidateInput & { dayKey: WeekdayKey; priority: number }> = [];
@@ -136,8 +140,8 @@ export const buildDefaultTimeCandidates = (
     dayPriorityByWeekday?.[dayKey] ?? 0;
 
   if (weekdaySlots) {
-    let offset = MIN_CANDIDATE_OFFSET_DAYS;
-    while (offset < 21) {
+    let offset = minOffset;
+    while (offset < minOffset + windowDays) {
       const jstVirtualDate = getJstVirtualDateAtOffset(baseNow, offset);
       const dayKey = weekdayKeyByIndex[jstVirtualDate.getUTCDay()];
       if (!dayKey) {
@@ -182,7 +186,7 @@ export const buildDefaultTimeCandidates = (
   }
 
   if (candidates.length > 0) {
-    return pickTopTimeCandidates(candidates);
+    return pickTopTimeCandidates(candidates, maxCandidates);
   }
 
   const startRange = availability?.timeRanges?.[0]?.start ?? "19:00";
@@ -190,9 +194,9 @@ export const buildDefaultTimeCandidates = (
   const availableDays = availability?.days
     ?.map((day: string) => dayIndex[day])
     .filter((day: number | undefined) => day !== undefined);
-  let offset = MIN_CANDIDATE_OFFSET_DAYS;
+  let offset = minOffset;
 
-  while (offset < 14) {
+  while (offset < minOffset + windowDays) {
     const jstVirtualDate = getJstVirtualDateAtOffset(baseNow, offset);
     const jstDayIndex = jstVirtualDate.getUTCDay();
     const dayKey = weekdayKeyByIndex[jstDayIndex];
@@ -230,11 +234,11 @@ export const buildDefaultTimeCandidates = (
   }
 
   if (candidates.length === 0) {
-    const fallbackVirtualDate = getJstVirtualDateAtOffset(baseNow, MIN_CANDIDATE_OFFSET_DAYS);
+    const fallbackVirtualDate = getJstVirtualDateAtOffset(baseNow, minOffset);
     const fallback = createUtcDateFromJstVirtualDate(fallbackVirtualDate, 19, 0);
     const end = createUtcDateFromJstVirtualDate(fallbackVirtualDate, 22, 0);
     return [{ startTime: fallback, endTime: end, score: 0, source: "system" as const }];
   }
 
-  return pickTopTimeCandidates(candidates);
+  return pickTopTimeCandidates(candidates, maxCandidates);
 };
