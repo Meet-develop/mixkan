@@ -10,6 +10,8 @@ import { formatEventStartLabel } from "@/lib/datetime";
 type EventSummary = {
   id: string;
   purpose: string;
+  area?: string | null;
+  areaPath?: string | null;
   visibility: "public" | "limited" | "private";
   capacity: number;
   status: "open" | "confirmed" | "completed" | "cancelled";
@@ -30,6 +32,10 @@ type FeedResponse = {
   participating: EventSummary[];
   invited: EventSummary[];
   public: EventSummary[];
+  allPublicCount?: number;
+  myAreasCount?: number;
+  userFavoriteAreas?: string[];
+  activeFilterAreas?: string[];
 };
 
 const formatStart = (start?: string | null) => {
@@ -46,7 +52,9 @@ export default function HomePage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [isSessionResolved, setIsSessionResolved] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
+  const [selectedAreaFilter, setSelectedAreaFilter] = useState<string | "all">("my_areas");
   const latestFeedRequestRef = useRef(0);
+  const hasLoadedFeedRef = useRef(false);
 
   useEffect(() => {
     let active = true;
@@ -69,7 +77,6 @@ export default function HomePage() {
         return;
       }
 
-      // Guard against transient null sessions on slower devices.
       const { data } = await supabase.auth.getSession();
       if (!active) return;
       setUserId(data.session?.user?.id ?? null);
@@ -90,24 +97,34 @@ export default function HomePage() {
     const loadEvents = async () => {
       const requestId = latestFeedRequestRef.current + 1;
       latestFeedRequestRef.current = requestId;
-      setIsLoading(true);
-      const query = userId ? `?viewerId=${userId}` : "";
+      if (!hasLoadedFeedRef.current) {
+        setIsLoading(true);
+      }
+      const params = new URLSearchParams();
+      if (userId) params.set("viewerId", userId);
+      if (selectedAreaFilter === "all") {
+        params.set("areaFilter", "all");
+      } else if (selectedAreaFilter !== "my_areas") {
+        params.set("area", selectedAreaFilter);
+      }
+      
       consumeFeedRefreshNeeded();
       const requestInit = { cache: "no-store" as const };
       const response = await fetch(
-        `/api/events${query}`,
+        `/api/events?${params.toString()}`,
         requestInit
       );
       if (requestId !== latestFeedRequestRef.current) {
         return;
       }
       const data = (await response.json()) as FeedResponse;
+      hasLoadedFeedRef.current = true;
       setFeed(data);
       setIsLoading(false);
     };
 
     loadEvents();
-  }, [isSessionResolved, userId]);
+  }, [isSessionResolved, userId, selectedAreaFilter]);
 
   const sortedParticipating = useMemo(
     () => [...feed.participating].sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt)),
@@ -145,13 +162,18 @@ export default function HomePage() {
       icon: "public",
       description: "誰でも参加できるイベント",
       events: sortedPublic,
-      emptyMessage: "公開イベントはまだありません。",
+      emptyMessage: selectedAreaFilter !== "all" && (feed.userFavoriteAreas?.length ?? 0) > 0
+        ? "設定したエリアに該当する公開イベントはありません。"
+        : "公開イベントはまだありません。",
     },
   ] as const;
 
   const visibleSections = userId
     ? sections
     : sections.filter((section) => section.key === "public");
+
+  const userAreas = feed.userFavoriteAreas ?? [];
+  const hasUserAreas = userAreas.length > 0;
 
   return (
     <div className="min-h-screen">
@@ -185,6 +207,80 @@ export default function HomePage() {
                 {section.events.length}
               </span>
             </div>
+
+            {/* Area Filter Bar & Notice for Public Section */}
+            {section.key === "public" && (
+              <div className="mb-4 rounded-2xl bg-orange-50/70 p-3.5 border border-orange-100 text-xs">
+                {hasUserAreas ? (
+                  <div className="flex flex-col gap-2">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="font-semibold text-orange-950 flex items-center gap-1">
+                        <span className="material-symbols-rounded text-sm text-[var(--accent)]">location_on</span>
+                        設定エリア: {userAreas.join(", ")}
+                      </span>
+                      {userId && (
+                        <Link
+                          href="/profile/setup"
+                          className="text-[var(--accent)] font-semibold hover:underline"
+                        >
+                          変更
+                        </Link>
+                      )}
+                    </div>
+                    <div className="flex flex-wrap gap-1.5 pt-1">
+                      <button
+                        onClick={() => setSelectedAreaFilter("my_areas")}
+                        className={`rounded-full px-2.5 py-1 font-semibold transition ${
+                          selectedAreaFilter === "my_areas"
+                            ? "bg-[var(--accent)] text-white"
+                            : "bg-white text-[var(--foreground)] border border-orange-200"
+                        }`}
+                      >
+                        マイエリア ({feed.myAreasCount ?? feed.public.length})
+                      </button>
+                      <button
+                        onClick={() => setSelectedAreaFilter("all")}
+                        className={`rounded-full px-2.5 py-1 font-semibold transition ${
+                          selectedAreaFilter === "all"
+                            ? "bg-[var(--accent)] text-white"
+                            : "bg-white text-[var(--foreground)] border border-orange-200"
+                        }`}
+                      >
+                        すべてのエリア ({feed.allPublicCount ?? feed.public.length})
+                      </button>
+                      {userAreas.map((area) => (
+                        <button
+                          key={area}
+                          onClick={() => setSelectedAreaFilter(area)}
+                          className={`rounded-full px-2.5 py-1 font-semibold transition ${
+                            selectedAreaFilter === area
+                              ? "bg-[var(--accent)] text-white"
+                              : "bg-white text-[var(--foreground)] border border-orange-200"
+                          }`}
+                        >
+                          {area}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between gap-3 text-orange-900">
+                    <div className="flex items-center gap-2">
+                      <span className="material-symbols-rounded text-base text-[var(--accent)]">location_searching</span>
+                      <span>エリアを設定をして近くのイベントを確認しましょう</span>
+                    </div>
+                    {userId && (
+                      <Link
+                        href="/profile/setup"
+                        className="rounded-full bg-[var(--accent)] px-3 py-1 font-semibold text-white shadow-sm shrink-0"
+                      >
+                        エリア設定
+                      </Link>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             {isLoading ? (
               <div className="rounded-3xl border border-orange-100 bg-white/85 p-8 text-center text-sm text-[var(--muted)] shadow-sm">
@@ -224,8 +320,16 @@ function EventListItem({ event }: { event: EventSummary }) {
         <span className="material-symbols-rounded">event</span>
       </div>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-semibold text-[var(--foreground)]">{event.purpose}</p>
-        <div className="flex items-center gap-2 text-xs text-[var(--muted)]">
+        <div className="flex items-center gap-2">
+          <p className="truncate text-sm font-semibold text-[var(--foreground)]">{event.purpose}</p>
+          {event.area && (
+            <span className="inline-flex items-center gap-0.5 shrink-0 rounded-full bg-orange-50 px-2 py-0.5 text-[10px] font-semibold text-orange-700 border border-orange-200">
+              <span className="material-symbols-rounded text-[12px]">location_on</span>
+              {event.area}
+            </span>
+          )}
+        </div>
+        <div className="flex items-center gap-2 text-xs text-[var(--muted)] mt-0.5">
           <AvatarName displayName={event.owner.displayName} avatarIcon={event.owner.avatarIcon} className="max-w-[60%]" textClassName="truncate" />
           <span>・{primaryTime}</span>
         </div>

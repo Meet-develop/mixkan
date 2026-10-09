@@ -8,6 +8,7 @@ import {
   buildDefaultTimeCandidates,
   type AvailabilityInput,
 } from "@/lib/event-time-candidates";
+import { buildAreaPath, matchAreaPath } from "@/lib/area-path";
 
 type PlaceCandidateInput = {
   placeId: string;
@@ -128,6 +129,8 @@ const FEED_CACHE_CONTROL = "no-store, max-age=0";
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const viewerId = searchParams.get("viewerId");
+  const areaQueryParam = searchParams.get("area");
+  const areaFilterMode = searchParams.get("areaFilter");
   const includePast =
     searchParams.get("includePast") === "1" ||
     searchParams.get("includePast") === "true";
@@ -156,8 +159,17 @@ export async function GET(request: Request) {
     orderBy: { createdAt: "desc" },
   });
 
+  let viewerFavoriteAreas: string[] = [];
   let favoriteOwnerIds = new Set<string>();
   if (viewerId) {
+    const viewerProfile = await prisma.profile.findUnique({
+      where: { userId: viewerId },
+      select: { favoriteAreas: true },
+    });
+    if (viewerProfile?.favoriteAreas) {
+      viewerFavoriteAreas = viewerProfile.favoriteAreas;
+    }
+
     const favorites = await prisma.favoriteFriend.findMany({
       where: { userId: viewerId },
       select: { favoriteUserId: true },
@@ -178,6 +190,10 @@ export async function GET(request: Request) {
     })
     .map((event: any) => {
       const eventArea = (event as { area?: string | null }).area ?? null;
+      const eventAreaPath =
+        (event as { areaPath?: string | null }).areaPath ??
+        buildAreaPath(eventArea, event.fixedPlaceAddress);
+
       const approvedCount = event.participants.filter(
         (participant: any) => participant.status === "approved"
       ).length;
@@ -224,6 +240,7 @@ export async function GET(request: Request) {
         id: event.id,
         purpose: event.purpose,
         area: eventArea,
+        areaPath: eventAreaPath,
         visibility: event.visibility,
         capacity: event.capacity,
         status: event.status,
@@ -290,20 +307,68 @@ export async function GET(request: Request) {
     );
   }
 
-  const upcoming = formatted.filter(
-    (event: any) =>
+type FeedEventItem = {
+  id: string;
+  purpose: string;
+  area: string | null;
+  areaPath: string | null;
+  visibility: string;
+  capacity: number;
+  status: string;
+  scheduleMode: string;
+  startTime: string | null;
+  fixedStartTime: Date | null;
+  fixedEndTime: Date | null;
+  fixedPlaceId: string | null;
+  fixedPlaceName: string | null;
+  fixedPlaceAddress: string | null;
+  owner: {
+    userId: string;
+    displayName: string;
+    avatarIcon: string | null;
+  };
+  approvedCount: number;
+  participantUserIds: string[];
+  timeCandidates: { id: string; startTime: string; endTime: string; score: number }[];
+  placeCandidates: { id: string; name: string; address: string; score: number }[];
+  isFavoriteOwner: boolean;
+  viewerRelation: "participating" | "invited" | "public";
+  createdAt: Date;
+};
+
+  const upcoming = (formatted as FeedEventItem[]).filter(
+    (event) =>
       event.startTime == null || new Date(event.startTime).getTime() > now
   );
 
-  const participating = upcoming.filter((event: any) => event.viewerRelation === "participating");
-  const invited = upcoming.filter((event: any) => event.viewerRelation === "invited");
-  const publicEvents = upcoming.filter((event: any) => event.viewerRelation === "public");
+  const participating = upcoming.filter((event) => event.viewerRelation === "participating");
+  const invited = upcoming.filter((event) => event.viewerRelation === "invited");
+  const allPublic = upcoming.filter((event) => event.viewerRelation === "public");
+
+  let activeFilterAreas: string[] = [];
+  if (areaQueryParam && areaQueryParam !== "all") {
+    activeFilterAreas = [areaQueryParam];
+  } else if (areaFilterMode !== "all" && viewerFavoriteAreas.length > 0) {
+    activeFilterAreas = viewerFavoriteAreas;
+  }
+
+  const filteredPublicEvents = activeFilterAreas.length > 0
+    ? allPublic.filter((event) => matchAreaPath(event.areaPath, event.area, activeFilterAreas))
+    : allPublic;
+
+  const myAreaEvents = viewerFavoriteAreas.length > 0
+    ? allPublic.filter((event) => matchAreaPath(event.areaPath, event.area, viewerFavoriteAreas))
+    : allPublic;
 
   return NextResponse.json(
     {
       participating,
       invited,
-      public: publicEvents,
+      public: filteredPublicEvents,
+      allPublicCount: allPublic.length,
+      myAreasCount: myAreaEvents.length,
+      userFavoriteAreas: viewerFavoriteAreas,
+      activeFilterAreas,
     },
     {
       headers: {
@@ -432,11 +497,14 @@ export async function POST(request: Request) {
     ? new Date(fixedStartDate.getTime() + 2 * 60 * 60 * 1000)
     : undefined;
 
+  const computedAreaPath = buildAreaPath(resolvedEventArea, body.fixedPlace?.address);
+
   const eventCreateData: {
     ownerId: string;
     purpose: string;
     comment?: string | null;
     area?: string | null;
+    areaPath?: string | null;
     visibility: "public" | "limited" | "private";
     capacity: number;
     scheduleMode: "fixed" | "candidate";
@@ -461,6 +529,9 @@ export async function POST(request: Request) {
 
   if (resolvedEventArea) {
     eventCreateData.area = resolvedEventArea;
+  }
+  if (computedAreaPath) {
+    eventCreateData.areaPath = computedAreaPath;
   }
 
   let event;
