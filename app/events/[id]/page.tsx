@@ -18,7 +18,8 @@ type EventDetail = {
   purpose: string;
   comment?: string | null;
   area?: string | null;
-  visibility: "public" | "limited" | "private";
+  visibility: "public" | "limited" | "private" | "community";
+  community?: { id: string; name: string } | null;
   capacity: number;
   status: "open" | "confirmed" | "completed" | "cancelled";
   scheduleMode: "fixed" | "candidate";
@@ -160,6 +161,7 @@ const visibilityMeta: Record<
   public: { label: "公開イベント", icon: "public" },
   limited: { label: "限定公開", icon: "group" },
   private: { label: "プライベート", icon: "lock" },
+  community: { label: "コミュニティ限定", icon: "diversity_3" },
 };
 
 const participantStatusJa: Record<string, string> = {
@@ -1067,12 +1069,20 @@ export default function EventDetailPage() {
       <main className="mx-auto max-w-md px-4 py-8 sm:max-w-5xl sm:px-6 sm:py-10">
         <section>
           <div>
-              <p className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2.5 py-1 text-xs font-semibold text-[var(--accent)]">
-                <span className="material-symbols-rounded text-sm">
-                  {visibilityMeta[event.visibility].icon}
-                </span>
-                {visibilityMeta[event.visibility].label}
-              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <p className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2.5 py-1 text-xs font-semibold text-[var(--accent)]">
+                  <span className="material-symbols-rounded text-sm">
+                    {visibilityMeta[event.visibility].icon}
+                  </span>
+                  {visibilityMeta[event.visibility].label}
+                </p>
+                {event.community && (
+                  <p className="inline-flex items-center gap-1 rounded-full bg-orange-50 border border-orange-200 px-2.5 py-1 text-xs font-semibold text-[var(--accent)]">
+                    <span className="material-symbols-rounded text-sm">diversity_3</span>
+                    {event.community.name}
+                  </p>
+                )}
+              </div>
               <h1 className="text-3xl font-semibold">{event.purpose}</h1>
               <div className="mt-3 flex items-center justify-between gap-3">
                 <div className="text-sm text-[var(--muted)]">
@@ -1165,6 +1175,17 @@ export default function EventDetailPage() {
                 {statusMeta.label}
               </p>
             </div>
+            {event.community && (
+              <div className="p-1">
+                <p className="text-xs uppercase tracking-[0.2em] text-[var(--muted)]">
+                  コミュニティ
+                </p>
+                <p className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-[var(--accent)]">
+                  <span className="material-symbols-rounded text-base">diversity_3</span>
+                  {event.community.name}
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="mt-6 flex flex-wrap items-center gap-3">
