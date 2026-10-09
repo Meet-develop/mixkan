@@ -180,6 +180,7 @@ model Event {
   purpose         String
   comment         String?
   area            String?
+  areaPath        String?         @map("area_path")
   visibility      EventVisibility @default(public)
   capacity        Int
   status          EventStatus     @default(open)
