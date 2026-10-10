@@ -118,8 +118,9 @@ model Profile {
   userId         String         @id @db.Uuid @map("user_id")
   lineUserId     String?        @unique @map("line_user_id")
   displayName    String         @map("display_name")
-  avatarIcon     String?        @map("avatar_icon")
-  gender         Gender         @default(unspecified)
+  avatarIcon          String?        @map("avatar_icon")
+  avatarIconUpdatedAt DateTime?      @map("avatar_icon_updated_at")
+  gender              Gender         @default(unspecified)
   birthDate      DateTime?      @map("birth_date") @db.Date
   playFrequency  PlayFrequency? @map("play_frequency")
   drinkFrequency DrinkFrequency? @map("drink_frequency")

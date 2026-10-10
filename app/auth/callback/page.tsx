@@ -240,6 +240,7 @@ export default function AuthCallbackPage() {
             userId: session.user.id,
             displayName: fallbackDisplayName,
             avatarIcon: lineDefaults.avatarIcon,
+            avatarIconUpdatedAt: lineDefaults.avatarIcon ? new Date().toISOString() : undefined,
             birthDate: lineDefaults.birthDate,
             lineUserId,
             inviteToken: pendingInviteToken ?? undefined,
@@ -273,13 +274,16 @@ export default function AuthCallbackPage() {
             ? lineDefaults.displayName
             : profile.displayName;
 
+        const resolvedAvatarIcon = profile.avatarIcon ?? lineDefaults.avatarIcon;
+
         await fetch("/api/profiles", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             userId: session.user.id,
             displayName: resolvedDisplayName,
-            avatarIcon: profile.avatarIcon ?? lineDefaults.avatarIcon,
+            avatarIcon: resolvedAvatarIcon,
+            avatarIconUpdatedAt: resolvedAvatarIcon ? new Date().toISOString() : undefined,
             birthDate: profile.birthDate ?? lineDefaults.birthDate,
             lineUserId: profile.lineUserId ?? lineUserId,
           }),

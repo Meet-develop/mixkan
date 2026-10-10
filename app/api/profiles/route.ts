@@ -8,6 +8,7 @@ export async function POST(request: Request) {
     userId?: string;
     displayName?: string;
     avatarIcon?: string;
+    avatarIconUpdatedAt?: string;
     lineUserId?: string;
     gender?: "male" | "female" | "other" | "unspecified";
     birthDate?: string;
@@ -34,11 +35,18 @@ export async function POST(request: Request) {
     select: { userId: true },
   });
 
+  const avatarIconUpdatedAt = body.avatarIconUpdatedAt
+    ? new Date(body.avatarIconUpdatedAt)
+    : body.avatarIcon
+    ? new Date()
+    : undefined;
+
   const profile = await prisma.profile.upsert({
     where: { userId: body.userId },
     update: {
       displayName: body.displayName,
       avatarIcon: body.avatarIcon,
+      avatarIconUpdatedAt,
       lineUserId: body.lineUserId,
       gender: body.gender,
       birthDate: body.birthDate ? new Date(body.birthDate) : undefined,
@@ -55,6 +63,7 @@ export async function POST(request: Request) {
       userId: body.userId,
       displayName: body.displayName,
       avatarIcon: body.avatarIcon,
+      avatarIconUpdatedAt,
       lineUserId: body.lineUserId,
       gender: body.gender ?? "unspecified",
       birthDate: body.birthDate ? new Date(body.birthDate) : undefined,
