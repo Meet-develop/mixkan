@@ -1,12 +1,13 @@
 "use client";
 
-import React from "react";
+import React, { useEffect } from "react";
 
 type EventConfirmModalProps = {
   isOpen: boolean;
   onClose: () => void;
   onConfirm: () => void;
   isConfirming?: boolean;
+  error?: string | null;
 };
 
 export function EventConfirmModal({
@@ -14,13 +15,25 @@ export function EventConfirmModal({
   onClose,
   onConfirm,
   isConfirming = false,
+  error = null,
 }: EventConfirmModalProps) {
+  useEffect(() => {
+    if (!isOpen) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape" && !isConfirming) {
+        onClose();
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [isOpen, isConfirming, onClose]);
+
   if (!isOpen) return null;
 
   return (
     <div
       className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm animate-in fade-in duration-200"
-      onClick={onClose}
+      onClick={isConfirming ? undefined : onClose}
       role="dialog"
       aria-modal="true"
       aria-labelledby="confirm-modal-title"
@@ -57,6 +70,12 @@ export function EventConfirmModal({
             </div>
           </div>
         </div>
+
+        {error && (
+          <p role="alert" className="mt-4 rounded-xl bg-red-50 p-3 text-xs text-red-700">
+            {error}
+          </p>
+        )}
 
         <div className="mt-6 flex flex-col gap-2">
           <button

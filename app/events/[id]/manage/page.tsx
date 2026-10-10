@@ -59,6 +59,8 @@ export default function EventManagePage() {
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [isConfirming, setIsConfirming] = useState(false);
+  const [confirmError, setConfirmError] = useState<string | null>(null);
+  const [pageNotice, setPageNotice] = useState<string | null>(null);
 
   const applyEventState = (data: EventDetail) => {
     setEvent(data);
@@ -82,7 +84,9 @@ export default function EventManagePage() {
 
   const refreshEvent = async () => {
     const response = await fetch(`/api/events/${eventId}`, { cache: "no-store" });
-    if (!response.ok) return;
+    if (!response.ok) {
+      throw new Error(`refresh failed: ${response.status}`);
+    }
     const data = (await response.json()) as EventDetail;
     applyEventState(data);
   };
@@ -156,7 +160,7 @@ export default function EventManagePage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ownerId, userId }),
     });
-    refreshEvent();
+    refreshEvent().catch((err) => console.error("[refreshEvent] failed", err));
   };
 
   const handleDecline = async (userId: string) => {
@@ -166,7 +170,7 @@ export default function EventManagePage() {
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ownerId, userId }),
     });
-    refreshEvent();
+    refreshEvent().catch((err) => console.error("[refreshEvent] failed", err));
   };
 
   const handleInviteRequestDecision = async (
@@ -182,22 +186,35 @@ export default function EventManagePage() {
       body: JSON.stringify({ ownerId, requesterId, inviteeId, decision }),
     });
 
-    refreshEvent();
+    refreshEvent().catch((err) => console.error("[refreshEvent] failed", err));
   };
 
   const handleExecuteConfirm = async () => {
-    if (!ownerId) return;
+    if (!ownerId) {
+      setConfirmError("ログイン情報を取得できませんでした。再読み込みしてください。");
+      return;
+    }
+    if (isConfirming) return;
+    setConfirmError(null);
     setIsConfirming(true);
     try {
-      await fetch(`/api/events/${eventId}/confirm`, {
+      const res = await fetch(`/api/events/${eventId}/confirm`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ownerId, timeCandidateId, placeCandidateId }),
       });
-      await refreshEvent();
+      if (!res.ok) {
+        throw new Error(`confirm failed: ${res.status}`);
+      }
+      setShowConfirmModal(false);
+      await refreshEvent().catch(() =>
+        setPageNotice("確定しました。最新の情報を取得できなかったため、再読み込みしてください。")
+      );
+    } catch (e) {
+      console.error("[confirm] failed", { eventId, e });
+      setConfirmError("確定に失敗しました。通信環境を確認して、もう一度お試しください。");
     } finally {
       setIsConfirming(false);
-      setShowConfirmModal(false);
     }
   };
 
@@ -251,6 +268,24 @@ export default function EventManagePage() {
       </header>
 
       <main className="mx-auto max-w-md px-4 py-8 sm:max-w-5xl sm:px-6 sm:py-10">
+        {pageNotice && (
+          <div
+            role="alert"
+            className="mb-6 rounded-2xl bg-amber-50 border border-amber-200 p-4 text-sm text-amber-900 flex items-center justify-between gap-2"
+          >
+            <div className="flex items-center gap-2">
+              <span className="material-symbols-rounded text-amber-600 shrink-0">info</span>
+              <span>{pageNotice}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setPageNotice(null)}
+              className="text-amber-700 hover:text-amber-900 text-xs px-2 py-1 rounded"
+            >
+              閉じる
+            </button>
+          </div>
+        )}
         {ownerId && event.owner.userId !== ownerId && (
           <div className="mb-6 rounded-3xl bg-white/80 p-4 text-sm text-[var(--muted)] shadow-sm">
             このページはオーナー専用です。
@@ -386,7 +421,10 @@ export default function EventManagePage() {
 
         <div className="mt-8">
           <button
-            onClick={() => setShowConfirmModal(true)}
+            onClick={() => {
+              setConfirmError(null);
+              setShowConfirmModal(true);
+            }}
             disabled={
               !ownerId ||
               event.owner.userId !== ownerId ||
@@ -430,9 +468,13 @@ export default function EventManagePage() {
 
       <EventConfirmModal
         isOpen={showConfirmModal}
-        onClose={() => setShowConfirmModal(false)}
+        onClose={() => {
+          setConfirmError(null);
+          setShowConfirmModal(false);
+        }}
         onConfirm={handleExecuteConfirm}
         isConfirming={isConfirming}
+        error={confirmError}
       />
     </div>
   );
