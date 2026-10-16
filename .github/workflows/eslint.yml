@@ -3,6 +3,8 @@ name: ESLint
 on:
   pull_request:
     types: [opened, synchronize, reopened]
+    paths-ignore:
+      - ".github/workflows/**"
 
 permissions:
   contents: read
