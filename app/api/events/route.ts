@@ -267,10 +267,8 @@ export async function GET(request: Request) {
       .filter(
         (event: any) =>
           event.viewerRelation === "participating" &&
-          event.status !== "cancelled" &&
-          event.startTime != null &&
-          new Date(event.startTime).getTime() <= now &&
-          (!periodStart || new Date(event.startTime).getTime() >= periodStart.getTime())
+          event.status === "completed" &&
+          (!periodStart || (event.startTime != null && new Date(event.startTime).getTime() >= periodStart.getTime()))
       )
       .sort(
         (a: any, b: any) =>

@@ -605,7 +605,12 @@ export default function EventDetailPage() {
   const handleRecreateFromCompleted = async (
     mode: "same_members_new_place" | "same_place_new_members"
   ) => {
-    if (!userId || !event) return;
+    if (!userId) {
+      setAuthOverlayMode("login");
+      setIsAuthOverlayOpen(true);
+      return;
+    }
+    if (!event) return;
 
     setRecreateMessage(null);
     setRecreateMode(mode);
@@ -1171,7 +1176,7 @@ export default function EventDetailPage() {
             <span className="rounded-full bg-orange-100 px-3 py-1 text-xs font-semibold text-orange-600">
               参加 {event.participants.filter((p) => p.status === "approved").length}/{event.capacity}
             </span>
-            {event.status === "completed" && userId ? (
+            {event.status === "completed" ? (
               <div className="w-full space-y-2 sm:w-auto sm:min-w-[19rem]">
                 <button
                   onClick={() => handleRecreateFromCompleted("same_members_new_place")}
