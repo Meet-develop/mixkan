@@ -45,6 +45,7 @@ enum EventVisibility {
   public
   limited
   private
+  community
 
   @@map("event_visibility")
 }
@@ -145,6 +146,7 @@ model Profile {
   timeVotes      EventTimeVote[]
   placeVotes     EventPlaceVote[]
   notifications  Notification[]
+  communities    CommunityMember[]
 
   @@map("profiles")
 }
@@ -199,6 +201,8 @@ model Event {
   timeCandidates  EventTimeCandidate[]
   placeCandidates EventPlaceCandidate[]
   notifications   Notification[]
+  communityId     String?         @map("community_id") @db.Uuid
+  community       Community?      @relation(fields: [communityId], references: [id], onDelete: SetNull)
 
   @@map("events")
 }
@@ -337,3 +341,30 @@ model Notification {
 
   @@map("notifications")
 }
+
+model Community {
+  id          String            @id @default(uuid()) @db.Uuid
+  name        String
+  description String?
+  createdAt   DateTime          @default(now()) @map("created_at")
+  updatedAt   DateTime          @updatedAt @map("updated_at")
+
+  members     CommunityMember[]
+  events      Event[]
+
+  @@map("communities")
+}
+
+model CommunityMember {
+  communityId String    @map("community_id") @db.Uuid
+  userId      String    @map("user_id") @db.Uuid
+  role        String    @default("member")
+  joinedAt    DateTime  @default(now()) @map("joined_at")
+
+  community   Community @relation(fields: [communityId], references: [id], onDelete: Cascade)
+  user        Profile   @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@id([communityId, userId])
+  @@map("community_members")
+}
+

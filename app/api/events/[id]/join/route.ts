@@ -135,6 +135,28 @@ export async function POST(
     await syncApprovedEventFriendships(id);
   }
 
+  // イベントがコミュニティイベントの場合、参加者を該当コミュニティに自動追加
+  if (event.communityId) {
+    try {
+      await prisma.communityMember.upsert({
+        where: {
+          communityId_userId: {
+            communityId: event.communityId,
+            userId: body.userId,
+          },
+        },
+        update: {},
+        create: {
+          communityId: event.communityId,
+          userId: body.userId,
+          role: "member",
+        },
+      });
+    } catch (error) {
+      console.error("[events/join] Failed to auto-join community:", error);
+    }
+  }
+
   // Create friendship with inviter if invite link was used
   if (inviterIdFromToken) {
     try {

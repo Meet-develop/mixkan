@@ -148,6 +148,7 @@ export async function GET(request: Request) {
   const events = await prisma.event.findMany({
     include: {
       owner: true,
+      community: true,
       participants: true,
       invites: true,
       timeCandidates: true,
@@ -157,12 +158,20 @@ export async function GET(request: Request) {
   });
 
   let favoriteOwnerIds = new Set<string>();
+  let viewerCommunityIds = new Set<string>();
   if (viewerId) {
-    const favorites = await prisma.favoriteFriend.findMany({
-      where: { userId: viewerId },
-      select: { favoriteUserId: true },
-    });
-    favoriteOwnerIds = new Set(favorites.map((favorite: any) => favorite.favoriteUserId));
+    const [favorites, memberships] = await Promise.all([
+      prisma.favoriteFriend.findMany({
+        where: { userId: viewerId },
+        select: { favoriteUserId: true },
+      }),
+      prisma.communityMember.findMany({
+        where: { userId: viewerId },
+        select: { communityId: true },
+      }),
+    ]);
+    favoriteOwnerIds = new Set(favorites.map((favorite) => favorite.favoriteUserId));
+    viewerCommunityIds = new Set(memberships.map((membership) => membership.communityId));
   }
 
   const formatted = events
@@ -174,7 +183,17 @@ export async function GET(request: Request) {
       const isOwner = event.ownerId === viewerId;
       const isParticipant = event.participants.some((participant: any) => participant.userId === viewerId);
       const isInvited = event.invites.some((invite: any) => invite.inviteeId === viewerId);
-      return event.visibility === "public" || isOwner || isParticipant || isInvited;
+      const isCommunityMember =
+        event.visibility === "community" &&
+        Boolean(event.communityId && viewerCommunityIds.has(event.communityId));
+
+      return (
+        event.visibility === "public" ||
+        isOwner ||
+        isParticipant ||
+        isInvited ||
+        isCommunityMember
+      );
     })
     .map((event: any) => {
       const eventArea = (event as { area?: string | null }).area ?? null;
@@ -225,6 +244,12 @@ export async function GET(request: Request) {
         purpose: event.purpose,
         area: eventArea,
         visibility: event.visibility,
+        community: event.community
+          ? {
+              id: event.community.id,
+              name: event.community.name,
+            }
+          : null,
         capacity: event.capacity,
         status: event.status,
         scheduleMode: event.scheduleMode,
@@ -319,7 +344,9 @@ export async function POST(request: Request) {
     purpose?: string;
     comment?: string;
     eventArea?: string;
-    visibility?: "public" | "limited" | "private";
+    visibility?: "public" | "limited" | "private" | "community";
+    communityId?: string;
+    newCommunityName?: string;
     capacity?: number;
     scheduleMode?: "fixed" | "candidate";
     timeSetting?: "auto" | "manual";
@@ -432,12 +459,61 @@ export async function POST(request: Request) {
     ? new Date(fixedStartDate.getTime() + 2 * 60 * 60 * 1000)
     : undefined;
 
+  let resolvedCommunityId: string | null = null;
+  if (body.visibility === "community") {
+    if (body.newCommunityName?.trim()) {
+      const newComm = await prisma.community.create({
+        data: {
+          name: body.newCommunityName.trim(),
+          members: {
+            create: {
+              userId: body.ownerId,
+              role: "owner",
+            },
+          },
+        },
+      });
+      resolvedCommunityId = newComm.id;
+    } else if (body.communityId) {
+      const existingComm = await prisma.community.findUnique({
+        where: { id: body.communityId },
+      });
+      if (!existingComm) {
+        return NextResponse.json(
+          { message: "指定されたコミュニティが存在しません" },
+          { status: 400 }
+        );
+      }
+      resolvedCommunityId = existingComm.id;
+      await prisma.communityMember.upsert({
+        where: {
+          communityId_userId: {
+            communityId: existingComm.id,
+            userId: body.ownerId,
+          },
+        },
+        update: {},
+        create: {
+          communityId: existingComm.id,
+          userId: body.ownerId,
+          role: "owner",
+        },
+      });
+    } else {
+      return NextResponse.json(
+        { message: "コミュニティイベントの作成には、コミュニティの選択または新規作成が必要です" },
+        { status: 400 }
+      );
+    }
+  }
+
   const eventCreateData: {
     ownerId: string;
     purpose: string;
     comment?: string | null;
     area?: string | null;
-    visibility: "public" | "limited" | "private";
+    visibility: "public" | "limited" | "private" | "community";
+    communityId?: string | null;
     capacity: number;
     scheduleMode: "fixed" | "candidate";
     fixedStartTime?: Date;
@@ -450,6 +526,7 @@ export async function POST(request: Request) {
     purpose: body.purpose,
     comment: body.comment?.trim() ? body.comment.trim() : null,
     visibility: body.visibility ?? "public",
+    communityId: resolvedCommunityId,
     capacity: body.capacity,
     scheduleMode: resolvedScheduleMode,
     fixedStartTime: fixedStartDate,
