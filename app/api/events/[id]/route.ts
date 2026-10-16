@@ -113,7 +113,7 @@ export async function GET(
     });
   }
 
-  const participants = event.participants.map((participant: any) => ({
+  const participants = event.participants.map((participant) => ({
     userId: participant.userId,
     displayName: participant.user.displayName,
     avatarIcon: participant.user.avatarIcon,
@@ -122,11 +122,11 @@ export async function GET(
     invitedBy: inviterByInviteeId.get(participant.userId) ?? null,
   }));
 
-  const participantUserIds = new Set(participants.map((participant: any) => participant.userId));
+  const participantUserIds = new Set(participants.map((participant) => participant.userId));
 
   const pendingInviteeIds = new Set<string>();
   const invitedUsers = event.invites
-    .filter((invite: any) => {
+    .filter((invite) => {
       if (invite.status !== "pending") return false;
       if (!invite.inviteeId) return false;
       if (participantUserIds.has(invite.inviteeId)) return false;
@@ -134,7 +134,7 @@ export async function GET(
       pendingInviteeIds.add(invite.inviteeId);
       return true;
     })
-    .map((invite: any) => ({
+    .map((invite) => ({
       userId: invite.inviteeId as string,
       displayName: invite.invitee?.displayName ?? "招待中ユーザー",
       avatarIcon: invite.invitee?.avatarIcon ?? null,
@@ -154,16 +154,16 @@ export async function GET(
   };
 
   const timeCandidates = event.timeCandidates
-    .map((candidate: any) => {
+    .map((candidate) => {
       const weightedScore = candidate.votes.reduce(
-        (acc: number, vote: any) => acc + (availabilityWeight[vote.availability as TimeAvailability] ?? 0),
+        (acc, vote) => acc + (availabilityWeight[vote.availability as TimeAvailability] ?? 0),
         0
       );
       const availableVotes = candidate.votes.filter(
-        (vote: any) => vote.availability === "available"
+        (vote) => vote.availability === "available"
       ).length;
       const myVote = viewerId
-        ? candidate.votes.find((vote: any) => vote.userId === viewerId)
+        ? candidate.votes.find((vote) => vote.userId === viewerId)
         : undefined;
       return {
         id: candidate.id,
@@ -176,15 +176,15 @@ export async function GET(
         myAvailability: myVote?.availability ?? null,
       };
     })
-    .sort((a: any, b: any) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
+    .sort((a, b) => new Date(a.startTime).getTime() - new Date(b.startTime).getTime())
     .slice(0, 5);
 
   const placeCandidates = (
     await Promise.all(
-      event.placeCandidates.map(async (candidate: any) => {
-        const totalScore = candidate.votes.reduce((acc: number, vote: any) => acc + vote.score, 0);
+      event.placeCandidates.map(async (candidate) => {
+        const totalScore = candidate.votes.reduce((acc, vote) => acc + vote.score, 0);
         const myVote = viewerId
-          ? candidate.votes.find((vote: any) => vote.userId === viewerId)
+          ? candidate.votes.find((vote) => vote.userId === viewerId)
           : undefined;
         const photoUrl = await getPlacePhotoUrlByPlaceId(candidate.placeId);
         return {
@@ -217,7 +217,7 @@ export async function GET(
     requester: { userId: string; displayName: string; avatarIcon?: string | null };
     invitee: { userId: string; displayName: string; avatarIcon?: string | null };
     createdAt: Date;
-  }> }).inviteRequests ?? []).map((request: any) => ({
+  }> }).inviteRequests ?? []).map((request) => ({
     id: request.id,
     requester: {
       userId: request.requester.userId,
@@ -658,10 +658,10 @@ export async function PATCH(
 
   const notifyUserIds = event.participants
     .filter(
-      (participant: any) =>
+      (participant) =>
         participant.userId !== event.ownerId && participant.status === "approved"
     )
-    .map((participant: any) => participant.userId);
+    .map((participant) => participant.userId);
 
   if (notifyUserIds.length > 0) {
     await createAppNotifications(
@@ -707,12 +707,12 @@ export async function DELETE(
 
   const notifyUserIds = event.participants
     .filter(
-      (participant: any) =>
+      (participant) =>
         participant.userId !== event.ownerId &&
         participant.status !== "declined" &&
         participant.status !== "cancelled"
     )
-    .map((participant: any) => participant.userId);
+    .map((participant) => participant.userId);
 
   if (notifyUserIds.length > 0) {
     await createAppNotifications(

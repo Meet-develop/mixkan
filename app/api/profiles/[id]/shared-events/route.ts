@@ -93,7 +93,7 @@ export async function GET(
   const now = Date.now();
 
   const sharedEvents = events
-    .map((event: any) => {
+    .map((event) => {
       const startTime = getEventStartTime(event);
       return {
         id: event.id,
@@ -106,11 +106,11 @@ export async function GET(
       };
     })
     .filter(
-      (event: any) =>
+      (event) =>
         event.startTime != null && new Date(event.startTime).getTime() <= now
     )
     .sort(
-      (a: any, b: any) =>
+      (a, b) =>
         new Date(b.startTime ?? b.createdAt).getTime() -
         new Date(a.startTime ?? a.createdAt).getTime()
     )

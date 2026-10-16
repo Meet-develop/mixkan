@@ -100,9 +100,11 @@ export default function RootLayout({
   return (
     <html lang="ja">
       <head>
+        {/* App Router のルートレイアウトは全ページ共通のため no-page-custom-font は誤検知。アイコンフォントはリガチャ文字の表示を防ぐため display=block を指定 */}
+        {/* eslint-disable-next-line @next/next/no-page-custom-font, @next/next/google-font-display */}
         <link
           rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,300..700,0..1,0"
+          href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,300..700,0..1,0&display=block"
         />
       </head>
       <body

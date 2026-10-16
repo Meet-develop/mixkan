@@ -349,7 +349,7 @@ export default function EventDetailPage() {
     event && userId ? `calendar-registration:${event.id}:${userId}` : null;
 
   useEffect(() => {
-    if (!calendarRegistrationStorageKey || !event) {
+    if (!calendarRegistrationStorageKey) {
       setCalendarRegistrationVersion(null);
       return;
     }
@@ -579,6 +579,8 @@ export default function EventDetailPage() {
         // ignore
       }
     }
+    // handleJoin は毎レンダー再生成されるため依存に含めない（保留中の参加処理を一度だけ実行する）
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, eventId, event, participantStatus]);
 
   const handleLeave = async () => {
@@ -925,11 +927,11 @@ export default function EventDetailPage() {
       `${window.location.origin}/events/${eventId}${userId ? `?ref=${encodeURIComponent(userId)}` : ""}`;
     const text = "このイベントに一緒に参加しませんか？";
 
-    if ((navigator as any).share) {
+    if (navigator.share) {
       try {
-        await (navigator as any).share({ title: event.purpose, text, url: urlToShare });
+        await navigator.share({ title: event.purpose, text, url: urlToShare });
       } catch (error) {
-        const err = error as any;
+        const err = error as { message?: string; name?: string } | null;
         const errMsg = err?.message || "";
         const errName = err?.name || "";
         const errStr = String(error);
@@ -965,7 +967,7 @@ export default function EventDetailPage() {
             : "イベントのリンクをコピーしました。"
         );
       }
-    } catch (error) {
+    } catch {
       if (!quiet) setInviteMessage("コピーに失敗しました。リンクを長押しして共有してください。");
     }
   };

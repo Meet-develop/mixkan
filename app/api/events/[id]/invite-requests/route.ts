@@ -52,7 +52,7 @@ export async function POST(
     return NextResponse.json({ message: "Forbidden" }, { status: 403 });
   }
 
-  const requestRecord = await (prisma as any).eventInviteRequest.findUnique({
+  const requestRecord = await prisma.eventInviteRequest.findUnique({
     where: {
       eventId_requesterId_inviteeId: {
         eventId: id,
@@ -84,7 +84,7 @@ export async function POST(
         (invite.status === "pending" || invite.status === "accepted")
     );
 
-    await (prisma as any).eventInviteRequest.update({
+    await prisma.eventInviteRequest.update({
       where: { id: requestRecord.id },
       data: { status: "accepted" },
     });
@@ -122,7 +122,7 @@ export async function POST(
     return NextResponse.json({ success: true, status: "accepted" });
   }
 
-  await (prisma as any).eventInviteRequest.update({
+  await prisma.eventInviteRequest.update({
     where: { id: requestRecord.id },
     data: { status: "declined" },
   });

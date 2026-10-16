@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { createAppNotification } from "@/lib/notification-delivery";
 
@@ -48,7 +49,7 @@ export async function POST(request: Request) {
       ngFoods: body.ngFoods ?? [],
       favoriteAreas: body.favoriteAreas ?? [],
       favoritePlaces: body.favoritePlaces ?? [],
-      availability: (body.availability ?? undefined) as any,
+      availability: (body.availability ?? undefined) as Prisma.InputJsonValue | undefined,
     },
     create: {
       userId: body.userId,
@@ -64,7 +65,7 @@ export async function POST(request: Request) {
       ngFoods: body.ngFoods ?? [],
       favoriteAreas: body.favoriteAreas ?? [],
       favoritePlaces: body.favoritePlaces ?? [],
-      availability: (body.availability ?? undefined) as any,
+      availability: (body.availability ?? undefined) as Prisma.InputJsonValue | undefined,
     },
   });
 
