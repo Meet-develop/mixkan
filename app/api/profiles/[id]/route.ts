@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { hasAnyWeekdayAvailability } from "@/lib/availability";
+import { refreshLineAvatarIfExpired } from "@/lib/line-avatar";
 
 const PROFILE_CACHE_CONTROL = "no-store, max-age=0";
 
@@ -70,6 +71,12 @@ export async function GET(
     return NextResponse.json({ message: "Not found" }, { status: 404 });
   }
 
+  const { avatarIcon: latestAvatarIcon } = await refreshLineAvatarIfExpired(profile);
+  const activeProfile = {
+    ...profile,
+    avatarIcon: latestAvatarIcon,
+  };
+
   const [hostedCount, participatingCount, friendships] = await Promise.all([
     prisma.event.count({ where: { ownerId: id } }),
     prisma.eventParticipant.count({
@@ -94,12 +101,12 @@ export async function GET(
   ).size;
 
   return NextResponse.json({
-    ...profile,
+    ...activeProfile,
     stats: {
       hostedCount,
       participatingCount,
       friendCount,
-      completionRate: calcProfileCompletion(profile),
+      completionRate: calcProfileCompletion(activeProfile),
     },
   }, {
     headers: {
