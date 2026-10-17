@@ -25,7 +25,6 @@ const periodOptions = [
 ] as const;
 
 export default function NotificationsPage() {
-  const [userId, setUserId] = useState<string | null>(null);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [period, setPeriod] = useState<(typeof periodOptions)[number]["value"]>("30d");
 
@@ -42,8 +41,6 @@ export default function NotificationsPage() {
     const loadUser = async () => {
       const { data } = await supabase.auth.getSession();
       const currentUserId = data.session?.user?.id ?? null;
-      setUserId(currentUserId);
-
       if (currentUserId) {
         loadNotifications(currentUserId, period);
       }

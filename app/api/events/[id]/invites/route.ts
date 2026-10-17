@@ -105,7 +105,7 @@ export async function POST(
   if (requestMode) {
     await Promise.all(
       targetIds.map((inviteeId) =>
-        (prisma as any).eventInviteRequest.upsert({
+        prisma.eventInviteRequest.upsert({
           where: {
             eventId_requesterId_inviteeId: {
               eventId: event.id,

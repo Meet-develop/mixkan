@@ -118,7 +118,7 @@ const findFallbackPlaces = async (query: string, limit = 6): Promise<PlaceResult
   });
 
   if (cachedCandidates.length > 0) {
-    return cachedCandidates.map((candidate: any) => ({
+    return cachedCandidates.map((candidate) => ({
       placeId: candidate.placeId,
       name: candidate.name,
       address: candidate.address,

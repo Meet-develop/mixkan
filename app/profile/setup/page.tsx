@@ -543,6 +543,38 @@ export default function ProfileSetupPage() {
     weekdaySlots,
   ]);
 
+  const currentSnapshot = useMemo(
+    () =>
+      createProfileSnapshot({
+        displayName,
+        avatarIcon,
+        gender,
+        birthDate,
+        playFrequency,
+        drinkFrequency,
+        budgetOption,
+        ngFoods,
+        favoriteAreas,
+        favoritePlaces,
+        weekdaySlots,
+        frequentPlaces,
+      }),
+    [
+      avatarIcon,
+      birthDate,
+      budgetOption,
+      displayName,
+      drinkFrequency,
+      favoriteAreas,
+      favoritePlaces,
+      frequentPlaces,
+      gender,
+      ngFoods,
+      playFrequency,
+      weekdaySlots,
+    ]
+  );
+
   const toggleItem = (setter: Dispatch<SetStateAction<string[]>>, value: string) => {
     setter((prev) => (prev.includes(value) ? prev.filter((item) => item !== value) : [...prev, value]));
   };
@@ -782,38 +814,6 @@ export default function ProfileSetupPage() {
     await supabase.auth.signOut();
     router.push("/login");
   };
-
-  const currentSnapshot = useMemo(
-    () =>
-      createProfileSnapshot({
-        displayName,
-        avatarIcon,
-        gender,
-        birthDate,
-        playFrequency,
-        drinkFrequency,
-        budgetOption,
-        ngFoods,
-        favoriteAreas,
-        favoritePlaces,
-        weekdaySlots,
-        frequentPlaces,
-      }),
-    [
-      avatarIcon,
-      birthDate,
-      budgetOption,
-      displayName,
-      drinkFrequency,
-      favoriteAreas,
-      favoritePlaces,
-      frequentPlaces,
-      gender,
-      ngFoods,
-      playFrequency,
-      weekdaySlots,
-    ]
-  );
 
   const isProfileChanged = useMemo(() => {
     if (!initialSnapshot) return false;
