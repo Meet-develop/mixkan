@@ -51,7 +51,61 @@ type GooglePlaceNewDetailsResponse = {
   photos?: Array<{ name?: string }>;
 };
 
-const DEFAULT_TTL_MS = 1000 * 60 * 60 * 24;
+export const DEFAULT_TTL_MS = 1000 * 60 * 60 * 24;
+
+export const getPlacesPhotoTtlMs = (): number => {
+  const envMs = process.env.PLACES_PHOTO_TTL_MS;
+  if (envMs) {
+    const parsed = parseInt(envMs, 10);
+    if (!Number.isNaN(parsed) && parsed > 0) return parsed;
+  }
+  const envSec = process.env.PLACES_PHOTO_TTL_SECONDS;
+  if (envSec) {
+    const parsed = parseInt(envSec, 10);
+    if (!Number.isNaN(parsed) && parsed > 0) return parsed * 1000;
+  }
+  return DEFAULT_TTL_MS;
+};
+
+export const getPlacesApiRetryConfig = () => {
+  const retriesEnv = process.env.PLACES_API_MAX_RETRIES;
+  const delayEnv = process.env.PLACES_API_RETRY_DELAY_MS;
+  const maxRetries = retriesEnv ? parseInt(retriesEnv, 10) : 2;
+  const retryDelayMs = delayEnv ? parseInt(delayEnv, 10) : 500;
+  return {
+    maxRetries: Number.isNaN(maxRetries) || maxRetries < 0 ? 2 : maxRetries,
+    retryDelayMs: Number.isNaN(retryDelayMs) || retryDelayMs < 0 ? 500 : retryDelayMs,
+  };
+};
+
+export const isCacheExpired = (updatedAt: Date, ttlMs: number, now = Date.now()): boolean => {
+  return now - updatedAt.getTime() >= ttlMs;
+};
+
+export async function fetchWithRetry<T>(
+  fn: (attempt: number) => Promise<T>,
+  options: {
+    maxRetries: number;
+    delayMs: number;
+    onRetry?: (attempt: number, error: unknown) => void;
+  }
+): Promise<T> {
+  let attempt = 0;
+  while (true) {
+    try {
+      return await fn(attempt);
+    } catch (error) {
+      if (attempt >= options.maxRetries) {
+        throw error;
+      }
+      attempt++;
+      if (options.onRetry) {
+        options.onRetry(attempt, error);
+      }
+      await new Promise((resolve) => setTimeout(resolve, options.delayMs * attempt));
+    }
+  }
+}
 
 const NEW_API_FIELD_MASK =
   "places.id,places.displayName,places.formattedAddress,places.location,places.priceLevel,places.photos.name";
@@ -287,26 +341,10 @@ export async function getPlacesForQuery(
   return places;
 }
 
-export async function getPlacePhotoUrlByPlaceId(
+async function fetchPhotoUrlFromGooglePlaces(
   placeId: string,
-  ttlMs = DEFAULT_TTL_MS
+  apiKey: string
 ): Promise<string | null> {
-  const cacheKey = `photo:${placeId}`;
-  const cached = await prisma.placeCache.findUnique({ where: { query: cacheKey } });
-  if (cached) {
-    const age = Date.now() - cached.updatedAt.getTime();
-    if (age < ttlMs) {
-      const data = cached.response as { photoUrl?: string | null };
-      return data.photoUrl ?? null;
-    }
-  }
-
-  const apiKey = process.env.GOOGLE_PLACES_API_KEY;
-  if (!apiKey) {
-    return null;
-  }
-
-  let photoUrl: string | null = null;
   try {
     const newDetailResponse = await fetch(
       `https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}`,
@@ -322,38 +360,176 @@ export async function getPlacePhotoUrlByPlaceId(
       const payload = (await newDetailResponse.json()) as GooglePlaceNewDetailsResponse;
       const photoName = payload.photos?.[0]?.name;
       if (photoName) {
-        photoUrl = toPlacesNewPhotoUrl(photoName, apiKey);
+        return toPlacesNewPhotoUrl(photoName, apiKey);
       }
+    } else if (newDetailResponse.status >= 500 || newDetailResponse.status === 429) {
+      throw new Error(`Google Places New API HTTP ${newDetailResponse.status}`);
     }
-
-    if (!photoUrl) {
-      const detailsUrl = new URL("https://maps.googleapis.com/maps/api/place/details/json");
-      detailsUrl.searchParams.set("place_id", placeId);
-      detailsUrl.searchParams.set("fields", "photo");
-      detailsUrl.searchParams.set("key", apiKey);
-
-      const legacyDetailResponse = await fetch(detailsUrl.toString());
-      if (legacyDetailResponse.ok) {
-        const legacyPayload = (await legacyDetailResponse.json()) as {
-          result?: { photos?: Array<{ photo_reference?: string }> };
-        };
-        const photoRef = legacyPayload.result?.photos?.[0]?.photo_reference;
-        if (photoRef) {
-          photoUrl = `https://maps.googleapis.com/maps/api/place/photo?maxwidth=320&photo_reference=${encodeURIComponent(photoRef)}&key=${apiKey}`;
-        }
-      }
+  } catch (error) {
+    if (error instanceof Error && (error.message.includes("HTTP 5") || error.message.includes("HTTP 429"))) {
+      throw error;
     }
-  } catch {
-    photoUrl = null;
   }
 
-  await prisma.placeCache.upsert({
-    where: { query: cacheKey },
-    create: { query: cacheKey, response: { photoUrl } },
-    update: { response: { photoUrl } },
-  });
+  const detailsUrl = new URL("https://maps.googleapis.com/maps/api/place/details/json");
+  detailsUrl.searchParams.set("place_id", placeId);
+  detailsUrl.searchParams.set("fields", "photo");
+  detailsUrl.searchParams.set("key", apiKey);
 
-  return photoUrl;
+  const legacyDetailResponse = await fetch(detailsUrl.toString());
+  if (legacyDetailResponse.ok) {
+    const legacyPayload = (await legacyDetailResponse.json()) as {
+      result?: { photos?: Array<{ photo_reference?: string }> };
+      status?: string;
+    };
+    if (legacyPayload.status === "OVER_QUERY_LIMIT") {
+      throw new Error("Google Places Legacy API: OVER_QUERY_LIMIT");
+    }
+    const photoRef = legacyPayload.result?.photos?.[0]?.photo_reference;
+    if (photoRef) {
+      return `https://maps.googleapis.com/maps/api/place/photo?maxwidth=320&photo_reference=${encodeURIComponent(photoRef)}&key=${apiKey}`;
+    }
+  } else if (legacyDetailResponse.status >= 500 || legacyDetailResponse.status === 429) {
+    throw new Error(`Google Places Legacy API HTTP ${legacyDetailResponse.status}`);
+  }
+
+  return null;
+}
+
+export type PlacePhotoCacheRecord = {
+  query: string;
+  response: unknown;
+  updatedAt: Date;
+  createdAt: Date;
+};
+
+export type PlacePhotoCacheUpsertArgs = {
+  where: { query: string };
+  create: {
+    query: string;
+    response: {
+      photoUrl: string | null;
+      fetchedAt: string;
+    };
+  };
+  update: {
+    response: {
+      photoUrl: string | null;
+      fetchedAt: string;
+    };
+  };
+};
+
+export type PlacePhotoCacheDbClient = {
+  placeCache: {
+    findUnique: (args: { where: { query: string } }) => Promise<PlacePhotoCacheRecord | null>;
+    update: (args: { where: { query: string }; data: { updatedAt: Date } }) => Promise<unknown>;
+    upsert: (args: PlacePhotoCacheUpsertArgs) => Promise<unknown>;
+  };
+};
+
+export async function getPlacePhotoUrlByPlaceId(
+  placeId: string,
+  ttlMs?: number,
+  dbClient: PlacePhotoCacheDbClient = prisma
+): Promise<string | null> {
+  const effectiveTtlMs = ttlMs ?? getPlacesPhotoTtlMs();
+  const cacheKey = `photo:${placeId}`;
+
+  let cached: {
+    query: string;
+    response: unknown;
+    updatedAt: Date;
+    createdAt: Date;
+  } | null = null;
+
+  try {
+    cached = await dbClient.placeCache.findUnique({ where: { query: cacheKey } });
+  } catch (dbError) {
+    console.error(`[PlacesCache] Failed to query cache for placeId: ${placeId}`, dbError);
+  }
+
+  let existingPhotoUrl: string | null = null;
+  if (cached) {
+    const data = cached.response as { photoUrl?: string | null };
+    existingPhotoUrl = data?.photoUrl ?? null;
+    if (!isCacheExpired(cached.updatedAt, effectiveTtlMs)) {
+      return existingPhotoUrl;
+    }
+  }
+
+  const apiKey = process.env.GOOGLE_PLACES_API_KEY;
+  if (!apiKey) {
+    if (existingPhotoUrl !== null) {
+      console.warn(`[PlacesCache] No GOOGLE_PLACES_API_KEY. Using cached photoUrl for placeId: ${placeId}`);
+      return existingPhotoUrl;
+    }
+    return null;
+  }
+
+  const { maxRetries, retryDelayMs } = getPlacesApiRetryConfig();
+  let newPhotoUrl: string | null = null;
+
+  try {
+    newPhotoUrl = await fetchWithRetry(
+      async () => fetchPhotoUrlFromGooglePlaces(placeId, apiKey),
+      {
+        maxRetries,
+        delayMs: retryDelayMs,
+        onRetry: (attempt, error) => {
+          console.warn(
+            `[PlacesCache] Retry ${attempt}/${maxRetries} for placeId: ${placeId}. Reason:`,
+            error instanceof Error ? error.message : error
+          );
+        },
+      }
+    );
+  } catch (error) {
+    console.error(
+      `[PlacesCache] Failed to fetch photo for placeId: ${placeId} after ${maxRetries} retries.`,
+      error instanceof Error ? error.message : error
+    );
+    if (existingPhotoUrl !== null) {
+      console.warn(`[PlacesCache] Falling back to existing cached photo URL for placeId: ${placeId}`);
+      return existingPhotoUrl;
+    }
+    return null;
+  }
+
+  try {
+    // 画像URLに変更がない場合、不要な更新を避けてupdatedAtのみ更新
+    if (existingPhotoUrl && existingPhotoUrl === newPhotoUrl) {
+      console.info(`[PlacesCache] Photo URL unchanged for placeId: ${placeId}. Touching updatedAt.`);
+      await dbClient.placeCache.update({
+        where: { query: cacheKey },
+        data: { updatedAt: new Date() },
+      });
+      return newPhotoUrl;
+    }
+
+    // 最新の画像URLを取得した場合、保存済みのURLと取得日時を更新
+    console.info(`[PlacesCache] Photo URL updated for placeId: ${placeId}`);
+    await dbClient.placeCache.upsert({
+      where: { query: cacheKey },
+      create: {
+        query: cacheKey,
+        response: {
+          photoUrl: newPhotoUrl,
+          fetchedAt: new Date().toISOString(),
+        },
+      },
+      update: {
+        response: {
+          photoUrl: newPhotoUrl,
+          fetchedAt: new Date().toISOString(),
+        },
+      },
+    });
+  } catch (dbError) {
+    console.error(`[PlacesCache] Failed to save photoUrl to cache for placeId: ${placeId}`, dbError);
+  }
+
+  return newPhotoUrl ?? existingPhotoUrl;
 }
 
 export async function getAreaCandidatesForQuery(
