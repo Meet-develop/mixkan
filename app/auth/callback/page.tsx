@@ -233,7 +233,7 @@ export default function AuthCallbackPage() {
           }
         })();
 
-        await fetch("/api/profiles", {
+        const createResponse = await fetch("/api/profiles", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -245,6 +245,9 @@ export default function AuthCallbackPage() {
             inviteToken: pendingInviteToken ?? undefined,
           }),
         });
+        if (!createResponse.ok) {
+          console.error("Failed to create profile on auth callback", createResponse.status);
+        }
 
         const refetchedProfile = await fetch(
           `/api/profiles/${session.user.id}?viewerId=${encodeURIComponent(session.user.id)}`,
@@ -273,7 +276,7 @@ export default function AuthCallbackPage() {
             ? lineDefaults.displayName
             : profile.displayName;
 
-        await fetch("/api/profiles", {
+        const patchResponse = await fetch("/api/profiles", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -284,6 +287,9 @@ export default function AuthCallbackPage() {
             lineUserId: profile.lineUserId ?? lineUserId,
           }),
         });
+        if (!patchResponse.ok) {
+          console.error("Failed to update profile with LINE info", patchResponse.status);
+        }
       }
 
       const redirectPath = eventReturnTo ?? "/profile/setup";
