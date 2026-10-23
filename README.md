@@ -13,7 +13,7 @@
 ## 前提環境
 
 - Docker / Docker Compose
-- Node.js 22 系推奨
+- Node.js 22 系推奨（v22.23.4 以降）
 
 ## クイックスタート（Docker ローカルDB）
 
