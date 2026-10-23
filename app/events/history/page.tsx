@@ -9,6 +9,7 @@ import { formatEventStartLabel } from "@/lib/datetime";
 type EventSummary = {
   id: string;
   purpose: string;
+  status: string;
   fixedStartTime?: string | null;
   startTime?: string | null;
   timeCandidates: { id: string; startTime: string; endTime: string; score: number }[];
@@ -79,7 +80,8 @@ export default function EventHistoryPage() {
 
       const data = (await response.json()) as HistoryResponse;
       if (!active) return;
-      setHistory(data.history ?? []);
+      const completedEvents = (data.history ?? []).filter((event) => event.status === "completed");
+      setHistory(completedEvents);
       setIsLoading(false);
     };
 
