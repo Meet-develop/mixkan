@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
+import { ProfileCompletionModal } from "@/components/ui/profile-completion-modal";
+import type { Profile } from "@/components/ui/profile-completion-modal";
 
 type NavItem = {
   href: string;
@@ -53,7 +55,11 @@ export function MobileBottomNav() {
   const pathname = usePathname();
   const [userId, setUserId] = useState<string | null>(null);
   const [isSessionChecked, setIsSessionChecked] = useState(false);
-  const [profileCompletionRate, setProfileCompletionRate] = useState<number>(100);
+  const [profileCompletionRate, setProfileCompletionRate] = useState<number | null>(
+    null
+  );
+  const [profile, setProfile] = useState<Profile | null>(null);
+  const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
 
   useEffect(() => {
     let active = true;
@@ -103,21 +109,31 @@ export function MobileBottomNav() {
 
       if (!response.ok) {
         setProfileCompletionRate(0);
+        setProfile(null);
         return;
       }
 
-      const profile = (await response.json()) as { stats?: { completionRate?: number } };
-      setProfileCompletionRate(profile.stats?.completionRate ?? 0);
+      const profileJson = await response.json();
+      setProfile(profileJson);
+      setProfileCompletionRate(profileJson.stats?.completionRate ?? 0);
     };
 
     void loadProfile();
 
+    const handleProfileUpdate = () => {
+      void loadProfile();
+    };
+
+    window.addEventListener("profile-updated", handleProfileUpdate);
+
     return () => {
       active = false;
+      window.removeEventListener("profile-updated", handleProfileUpdate);
     };
   }, [userId]);
 
-  const canCreateEvent = userId == null || profileCompletionRate >= 100;
+  const canCreateEvent =
+    userId == null || (profileCompletionRate != null && profileCompletionRate >= 100);
 
   if (hiddenPathPrefixes.some((prefix) => pathname.startsWith(prefix))) {
     return null;
@@ -134,6 +150,7 @@ export function MobileBottomNav() {
           const active = item.match(pathname);
           const isCreateItem = item.href === "/events/new";
           const isDisabled = isCreateItem && userId != null && !canCreateEvent;
+
           const baseClass = item.emphasize
             ? active
               ? "-mt-5 rounded-2xl bg-[var(--accent)] px-3 py-2 text-white shadow-lg shadow-orange-300"
@@ -151,8 +168,9 @@ export function MobileBottomNav() {
               {isDisabled ? (
                 <button
                   type="button"
-                  disabled
-                  title="プロフィール設定が100%になるとイベントを作成できます。"
+                  onClick={() => setIsProfileModalOpen(true)}
+                  aria-haspopup="dialog"
+                  title="プロフィールを完了するとイベントを作成できます。"
                   className={`flex w-full flex-col items-center justify-center gap-1 text-[11px] font-semibold ${baseClass} ${disabledClass}`}
                 >
                   <span className="material-symbols-rounded text-[20px]">{item.icon}</span>
@@ -161,6 +179,12 @@ export function MobileBottomNav() {
               ) : (
                 <Link
                   href={item.href}
+                  onClick={(e) => {
+                    if (isCreateItem && !canCreateEvent) {
+                      e.preventDefault();
+                      setIsProfileModalOpen(true);
+                    }
+                  }}
                   className={`flex flex-col items-center justify-center gap-1 text-[11px] font-semibold ${baseClass}`}
                 >
                   <span className="material-symbols-rounded text-[20px]">{item.icon}</span>
@@ -171,6 +195,13 @@ export function MobileBottomNav() {
           );
         })}
       </ul>
+      {profile && (
+        <ProfileCompletionModal
+          visible={isProfileModalOpen}
+          profile={profile}
+          onClose={() => setIsProfileModalOpen(false)}
+        />
+      )}
     </nav>
   );
 }
