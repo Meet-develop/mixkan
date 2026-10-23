@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { createAppNotification } from "@/lib/notification-delivery";
+import {
+  buildInviteReceivedNotification,
+  createAppNotification,
+} from "@/lib/notification-delivery";
 
 type InviteRequestDecisionBody = {
   ownerId?: string;
@@ -100,14 +103,14 @@ export async function POST(
         },
       });
 
-      await createAppNotification({
-        userId: body.inviteeId,
-        type: "invite_received",
-        title: "イベント招待",
-        body: `${requester?.displayName ?? "参加者"}さんから「${event.purpose}」の招待が届きました。`,
-        message: `${requester?.displayName ?? "参加者"}さんから「${event.purpose}」の招待が届きました。`,
-        eventId: id,
-      });
+      await createAppNotification(
+        buildInviteReceivedNotification({
+          userId: body.inviteeId,
+          inviterName: requester?.displayName ?? "参加者",
+          eventPurpose: event.purpose,
+          eventId: id,
+        })
+      );
     }
 
     await createAppNotification({

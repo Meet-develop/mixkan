@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import type { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { createAppNotification } from "@/lib/notification-delivery";
+import { findLineUserIdFromAuth, linkLineUserId } from "@/lib/line-user";
 
 export async function POST(request: Request) {
   const body = (await request.json()) as {
@@ -39,23 +40,22 @@ export async function POST(request: Request) {
     update: {
       displayName: body.displayName,
       avatarIcon: body.avatarIcon,
-      lineUserId: body.lineUserId,
       gender: body.gender,
       birthDate: body.birthDate ? new Date(body.birthDate) : undefined,
       playFrequency: body.playFrequency,
       drinkFrequency: body.drinkFrequency,
       budgetMin: body.budgetMin,
       budgetMax: body.budgetMax,
-      ngFoods: body.ngFoods ?? [],
-      favoriteAreas: body.favoriteAreas ?? [],
-      favoritePlaces: body.favoritePlaces ?? [],
+      // 未指定の項目は上書きしない（LINE情報の補完リクエスト等で既存の値が消えないようにする）
+      ngFoods: body.ngFoods,
+      favoriteAreas: body.favoriteAreas,
+      favoritePlaces: body.favoritePlaces,
       availability: (body.availability ?? undefined) as Prisma.InputJsonValue | undefined,
     },
     create: {
       userId: body.userId,
       displayName: body.displayName,
       avatarIcon: body.avatarIcon,
-      lineUserId: body.lineUserId,
       gender: body.gender ?? "unspecified",
       birthDate: body.birthDate ? new Date(body.birthDate) : undefined,
       playFrequency: body.playFrequency,
@@ -68,6 +68,19 @@ export async function POST(request: Request) {
       availability: (body.availability ?? undefined) as Prisma.InputJsonValue | undefined,
     },
   });
+
+  // lineUserId は unique 制約があるため upsert とは分けて紐付け、失敗してもプロフィール保存は成功させる。
+  // Supabase Auth の identities から取得できる場合はそちらを正とし、古いプロフィールに残っている同じIDは付け替える。
+  const lineUserIdFromAuth = await findLineUserIdFromAuth(body.userId);
+  const lineUserId = lineUserIdFromAuth ?? body.lineUserId?.trim();
+  if (lineUserId && lineUserId !== profile.lineUserId) {
+    const linked = await linkLineUserId(body.userId, lineUserId, {
+      releaseFromOthers: Boolean(lineUserIdFromAuth),
+    });
+    if (linked) {
+      profile.lineUserId = lineUserId;
+    }
+  }
 
   if (!existingProfile) {
     await createAppNotification({

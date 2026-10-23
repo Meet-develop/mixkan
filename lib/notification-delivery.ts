@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { getAppOrigin } from "@/lib/site-url";
+import { ensureLineUserIdLinked } from "@/lib/line-user";
 
 type NotificationPayload = {
   userId: string;
@@ -52,15 +53,40 @@ const deliverToLineIfLinked = async (payload: NotificationPayload) => {
   const channelAccessToken = process.env.LINE_MESSAGING_CHANNEL_ACCESS_TOKEN?.trim();
   if (!channelAccessToken) return;
 
-  const profile = (await prisma.profile.findUnique({
+  const profile = await prisma.profile.findUnique({
     where: { userId: payload.userId },
-  })) as { lineUserId?: string | null } | null;
+    select: { lineUserId: true },
+  });
+  if (!profile) return;
 
-  const lineUserId = profile?.lineUserId?.trim();
+  const lineUserId =
+    profile.lineUserId?.trim() || (await ensureLineUserIdLinked(payload.userId));
   if (!lineUserId) return;
 
   const text = buildLineMessage(payload);
   await pushLineMessage(lineUserId, text);
+};
+
+export const buildInviteReceivedNotification = ({
+  userId,
+  inviterName,
+  eventPurpose,
+  eventId,
+}: {
+  userId: string;
+  inviterName: string;
+  eventPurpose: string;
+  eventId: string;
+}): NotificationPayload => {
+  const message = `${inviterName}さんから「${eventPurpose}」の招待が届きました。`;
+  return {
+    userId,
+    type: "invite_received",
+    title: "イベント招待",
+    body: message,
+    message,
+    eventId,
+  };
 };
 
 export const createAppNotification = async (payload: NotificationPayload) => {

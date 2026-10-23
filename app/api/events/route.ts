@@ -4,6 +4,10 @@ import { getPlacesForQuery } from "@/lib/places";
 import { parseIsoDateTimeWithTimeZone } from "@/lib/datetime";
 import { hasAnyWeekdayAvailability } from "@/lib/availability";
 import {
+  buildInviteReceivedNotification,
+  createAppNotifications,
+} from "@/lib/notification-delivery";
+import {
   buildDayPriorityByWeekday,
   buildDefaultTimeCandidates,
   type AvailabilityInput,
@@ -606,6 +610,23 @@ export async function POST(request: Request) {
         status: "pending" as const,
       })),
     });
+
+    const inviterName = ownerProfile.displayName;
+    try {
+      await createAppNotifications(
+        inviteeIds.map((inviteeId) =>
+          buildInviteReceivedNotification({
+            userId: inviteeId,
+            inviterName,
+            eventPurpose: event.purpose,
+            eventId: event.id,
+          })
+        )
+      );
+    } catch (error) {
+      // 通知の作成に失敗してもイベント作成自体は成功として扱う
+      console.error("Failed to create invite notifications on event creation", error);
+    }
   }
 
   return NextResponse.json({ id: event.id });

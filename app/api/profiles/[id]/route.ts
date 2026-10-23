@@ -93,8 +93,12 @@ export async function GET(
     )
   ).size;
 
+  // LINEのユーザーIDは本人以外に返さない
+  const { lineUserId, ...publicProfile } = profile;
+
   return NextResponse.json({
-    ...profile,
+    ...publicProfile,
+    ...(viewerId === id ? { lineUserId } : {}),
     stats: {
       hostedCount,
       participatingCount,
