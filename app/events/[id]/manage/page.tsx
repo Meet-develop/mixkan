@@ -155,22 +155,42 @@ export default function EventManagePage() {
 
   const handleApprove = async (userId: string) => {
     if (!ownerId) return;
-    await fetch(`/api/events/${eventId}/approve`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ownerId, userId }),
-    });
-    refreshEvent().catch((err) => console.error("[refreshEvent] failed", err));
+    setPageNotice(null);
+    try {
+      const res = await fetch(`/api/events/${eventId}/approve`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ownerId, userId }),
+      });
+      if (!res.ok) {
+        setPageNotice("承認に失敗しました。もう一度お試しください。");
+        return;
+      }
+      refreshEvent().catch((err) => console.error("[refreshEvent] failed", err));
+    } catch (err) {
+      console.error("[approve] failed", err);
+      setPageNotice("承認に失敗しました。もう一度お試しください。");
+    }
   };
 
   const handleDecline = async (userId: string) => {
     if (!ownerId) return;
-    await fetch(`/api/events/${eventId}/decline`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ownerId, userId }),
-    });
-    refreshEvent().catch((err) => console.error("[refreshEvent] failed", err));
+    setPageNotice(null);
+    try {
+      const res = await fetch(`/api/events/${eventId}/decline`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ownerId, userId }),
+      });
+      if (!res.ok) {
+        setPageNotice("非承認処理に失敗しました。もう一度お試しください。");
+        return;
+      }
+      refreshEvent().catch((err) => console.error("[refreshEvent] failed", err));
+    } catch (err) {
+      console.error("[decline] failed", err);
+      setPageNotice("非承認処理に失敗しました。もう一度お試しください。");
+    }
   };
 
   const handleInviteRequestDecision = async (
@@ -179,14 +199,23 @@ export default function EventManagePage() {
     decision: "approve" | "decline"
   ) => {
     if (!ownerId) return;
+    setPageNotice(null);
 
-    await fetch(`/api/events/${eventId}/invite-requests`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ownerId, requesterId, inviteeId, decision }),
-    });
-
-    refreshEvent().catch((err) => console.error("[refreshEvent] failed", err));
+    try {
+      const res = await fetch(`/api/events/${eventId}/invite-requests`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ownerId, requesterId, inviteeId, decision }),
+      });
+      if (!res.ok) {
+        setPageNotice("招待リクエストの処理に失敗しました。もう一度お試しください。");
+        return;
+      }
+      refreshEvent().catch((err) => console.error("[refreshEvent] failed", err));
+    } catch (err) {
+      console.error("[invite-requests] failed", err);
+      setPageNotice("招待リクエストの処理に失敗しました。もう一度お試しください。");
+    }
   };
 
   const handleExecuteConfirm = async () => {

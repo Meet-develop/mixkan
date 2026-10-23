@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect } from "react";
+import React, { useEffect, useRef } from "react";
 
 type EventConfirmModalProps = {
   isOpen: boolean;
@@ -17,6 +17,18 @@ export function EventConfirmModal({
   isConfirming = false,
   error = null,
 }: EventConfirmModalProps) {
+  const cancelButtonRef = useRef<HTMLButtonElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    const previousFocus = document.activeElement as HTMLElement | null;
+    cancelButtonRef.current?.focus();
+
+    return () => {
+      previousFocus?.focus?.();
+    };
+  }, [isOpen]);
+
   useEffect(() => {
     if (!isOpen) return;
     const onKey = (e: KeyboardEvent) => {
@@ -32,7 +44,7 @@ export function EventConfirmModal({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm animate-in fade-in duration-200"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 backdrop-blur-sm"
       onClick={isConfirming ? undefined : onClose}
       role="dialog"
       aria-modal="true"
@@ -87,6 +99,7 @@ export function EventConfirmModal({
             {isConfirming ? "確定処理中..." : "確定する"}
           </button>
           <button
+            ref={cancelButtonRef}
             onClick={onClose}
             disabled={isConfirming}
             className="flex w-full items-center justify-center gap-2 rounded-full bg-gray-100 px-4 py-3 text-sm font-semibold text-gray-700 hover:bg-gray-200 active:scale-[0.98] transition disabled:opacity-50"
