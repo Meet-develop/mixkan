@@ -6,6 +6,7 @@ import { useParams } from "next/navigation";
 import { AvatarName, getAvatarToneClass, isImageAvatar } from "@/components/ui/avatar-name";
 import { supabase } from "@/lib/supabase/client";
 import { formatEventStartLabel } from "@/lib/datetime";
+import { TypeBadge } from "@/components/features/diagnosis/type-badge";
 
 type ProfileStats = {
   hostedCount: number;
@@ -23,6 +24,7 @@ type ProfileDetail = {
   drinkFrequency?: string | null;
   favoriteAreas?: string[];
   favoritePlaces?: string[];
+  communityType?: string | null;
   stats?: ProfileStats;
 };
 
@@ -191,6 +193,11 @@ export default function FriendProfilePage() {
               )}
             </div>
             <h2 className="mt-3 text-xl font-semibold">{profile.displayName}</h2>
+            {profile.communityType && (
+              <div className="mt-2">
+                <TypeBadge code={profile.communityType} linkable />
+              </div>
+            )}
           </div>
 
           <div className="mt-4 grid grid-cols-3 gap-2 text-center">

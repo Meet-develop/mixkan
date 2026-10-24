@@ -27,6 +27,7 @@ const defaultTitleByType: Record<string, string> = {
   join_requested: "参加申請のお知らせ",
   join_approved: "参加承認のお知らせ",
   friend_added: "プロフィール登録のお願い",
+  feature_announcement: "新機能のお知らせ",
 };
 
 export const notificationTypeIcon: Record<string, string> = {
@@ -35,6 +36,7 @@ export const notificationTypeIcon: Record<string, string> = {
   join_requested: "person_add",
   join_approved: "how_to_reg",
   friend_added: "group",
+  feature_announcement: "celebration",
 };
 
 const resolveNotificationAction = (
@@ -66,6 +68,14 @@ const resolveNotificationAction = (
     return {
       actionHref: "/profile/setup",
       actionLabel: "プロフィール設定へ",
+    };
+  }
+
+  if (type === "feature_announcement") {
+    // 現状の新機能告知はコミュニティ属性診断のみ。告知先が増えたらリンクをDBに持たせる
+    return {
+      actionHref: "/diagnosis",
+      actionLabel: "診断をやってみる",
     };
   }
 

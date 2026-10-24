@@ -30,6 +30,7 @@ export function Providers({ children }: { children: ReactNode }) {
     if (pathname.startsWith("/signup")) return true;
     if (pathname.startsWith("/onboarding")) return true;
     if (pathname.startsWith("/auth/callback")) return true;
+    if (pathname.startsWith("/diagnosis")) return true;
     return isEventDetailPath(pathname);
   }, [pathname]);
 

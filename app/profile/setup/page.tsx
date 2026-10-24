@@ -7,6 +7,7 @@ import Image from "next/image";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { getAvatarToneClass, isImageAvatar } from "@/components/ui/avatar-name";
+import { TypeBadge } from "@/components/features/diagnosis/type-badge";
 
 type WeekdayKey = "mon" | "tue" | "wed" | "thu" | "fri" | "sat" | "sun";
 type Slot = { daytime: boolean; night: boolean };
@@ -42,6 +43,7 @@ type ProfileResponse = {
   favoriteAreas?: string[];
   favoritePlaces?: string[];
   availability?: unknown;
+  communityType?: string | null;
   stats?: ProfileStats;
 };
 
@@ -396,6 +398,7 @@ export default function ProfileSetupPage() {
   const [areaMessage, setAreaMessage] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [stats, setStats] = useState<ProfileStats>(defaultStats);
+  const [communityType, setCommunityType] = useState<string | null>(null);
   const [avatarUploadMessage, setAvatarUploadMessage] = useState<string | null>(null);
   const [initialSnapshot, setInitialSnapshot] = useState<ProfileFormSnapshot | null>(null);
 
@@ -457,6 +460,7 @@ export default function ProfileSetupPage() {
           setWeekdaySlots(nextWeekdaySlots);
           setFrequentPlaces(nextFrequentPlaces);
           setStats(profile.stats ?? defaultStats);
+          setCommunityType(profile.communityType ?? null);
 
           setInitialSnapshot(
             createProfileSnapshot({
@@ -921,6 +925,11 @@ export default function ProfileSetupPage() {
               <p className="mt-3 text-lg font-semibold text-[var(--foreground)]">
                 {displayName || "表示名未設定"}
               </p>
+              {communityType && (
+                <div className="mt-2">
+                  <TypeBadge code={communityType} linkable />
+                </div>
+              )}
             </div>
 
             {avatarUploadMessage && (
@@ -948,6 +957,21 @@ export default function ProfileSetupPage() {
                 />
               </div>
             </div>
+
+            {!communityType && (
+              <Link
+                href="/diagnosis"
+                className="mt-3 flex items-center justify-between rounded-2xl bg-gradient-to-r from-[var(--accent)] to-[var(--accent-2)] px-4 py-3 text-white shadow-md"
+              >
+                <span className="text-xs font-bold">
+                  🍻 コミュニティ属性診断をやってみる
+                  <span className="mt-0.5 block text-[10px] font-normal text-white/85">
+                    あなたの「居心地タイプ」を16タイプで診断!
+                  </span>
+                </span>
+                <span className="material-symbols-rounded">chevron_right</span>
+              </Link>
+            )}
           </div>
 
           <div className="mt-5 space-y-5">

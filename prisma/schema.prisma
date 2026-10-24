@@ -110,6 +110,7 @@ enum NotificationType {
   join_requested
   join_approved
   friend_added
+  feature_announcement
 
   @@map("notification_type")
 }
@@ -129,6 +130,10 @@ model Profile {
   favoriteAreas  String[]       @default([]) @map("favorite_areas")
   favoritePlaces String[]       @default([]) @map("favorite_places")
   availability   Json?          @map("availability")
+  // コミュニティ属性診断(16タイプ)。タイプ名変更をマイグレーション不要にするため文字列で保持
+  communityType        String?   @map("community_type")
+  communityAxisScores  Json?     @map("community_axis_scores")
+  communityDiagnosedAt DateTime? @map("community_diagnosed_at")
   createdAt      DateTime       @default(now()) @map("created_at")
   updatedAt      DateTime       @updatedAt @map("updated_at")
 

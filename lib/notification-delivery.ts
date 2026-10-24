@@ -3,11 +3,19 @@ import { getAppOrigin } from "@/lib/site-url";
 
 type NotificationPayload = {
   userId: string;
-  type: "event_confirmed" | "invite_received" | "join_requested" | "join_approved" | "friend_added";
+  type:
+    | "event_confirmed"
+    | "invite_received"
+    | "join_requested"
+    | "join_approved"
+    | "friend_added"
+    | "feature_announcement";
   title?: string | null;
   body?: string | null;
   message: string;
   eventId?: string | null;
+  // イベント以外のページへ誘導する場合のアプリ内パス(例: "/diagnosis")
+  linkPath?: string | null;
 };
 
 const buildLineMessage = (payload: NotificationPayload) => {
@@ -15,9 +23,11 @@ const buildLineMessage = (payload: NotificationPayload) => {
   const body = payload.body?.trim() || payload.message;
   const origin = getAppOrigin();
   const eventLink = payload.eventId && origin ? `${origin}/events/${payload.eventId}` : null;
+  const pathLink = payload.linkPath && origin ? `${origin}${payload.linkPath}` : null;
+  const link = eventLink ?? pathLink;
 
-  return eventLink
-    ? `${title}\n${body}\n\n詳細: ${eventLink}`
+  return link
+    ? `${title}\n${body}\n\n詳細: ${link}`
     : `${title}\n${body}`;
 };
 
