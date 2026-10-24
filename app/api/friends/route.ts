@@ -10,6 +10,7 @@ export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
   const userId = searchParams.get("userId");
   const eventArea = searchParams.get("eventArea")?.trim();
+  const communityId = searchParams.get("communityId")?.trim();
 
   if (!userId) {
     return NextResponse.json({ message: "Missing userId" }, { status: 400 });
@@ -29,6 +30,17 @@ export async function GET(request: Request) {
           displayName: true,
           avatarIcon: true,
           favoriteAreas: true,
+          communities: {
+            select: {
+              communityId: true,
+              community: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+            },
+          },
         },
       },
     },
@@ -43,10 +55,20 @@ export async function GET(request: Request) {
   );
 
   const normalizedEventArea = normalizeArea(eventArea);
-  const sortedFriends = friends
+  const filteredFriends = communityId
+    ? friends.filter((friend) =>
+        friend.friend.communities.some((c) => c.communityId === communityId)
+      )
+    : friends;
+
+  const sortedFriends = filteredFriends
     .map((friend) => {
       const area = friend.friend.favoriteAreas[0] ?? null;
       const isFavorite = favoriteUserIds.has(friend.friend.userId);
+      const friendCommunities = friend.friend.communities.map((c) => ({
+        id: c.community.id,
+        name: c.community.name,
+      }));
 
       return {
         userId: friend.friend.userId,
@@ -54,6 +76,7 @@ export async function GET(request: Request) {
         avatarIcon: friend.friend.avatarIcon,
         area,
         isFavorite,
+        communities: friendCommunities,
       };
     })
     .sort((a, b) => {

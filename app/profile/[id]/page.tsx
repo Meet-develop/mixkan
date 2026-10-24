@@ -23,6 +23,12 @@ type ProfileDetail = {
   drinkFrequency?: string | null;
   favoriteAreas?: string[];
   favoritePlaces?: string[];
+  communities?: {
+    id: string;
+    name: string;
+    description?: string | null;
+    role: string;
+  }[];
   stats?: ProfileStats;
 };
 
@@ -214,6 +220,28 @@ export default function FriendProfilePage() {
         </div>
 
         <section className="mt-5 py-4">
+          <h3 className="text-sm font-semibold flex items-center gap-1.5">
+            <span className="material-symbols-rounded text-base text-[var(--accent)]">diversity_3</span>
+            コミュニティ
+          </h3>
+          <div className="mt-2 flex flex-wrap gap-2">
+            {(profile.communities ?? []).length === 0 ? (
+              <p className="text-xs text-[var(--muted)]">未所属</p>
+            ) : (
+              (profile.communities ?? []).map((community) => (
+                <span
+                  key={community.id}
+                  className="inline-flex items-center gap-1.5 rounded-full bg-orange-50 border border-orange-100 px-3 py-1 text-xs font-medium text-[var(--foreground)] shadow-sm"
+                >
+                  <span className="material-symbols-rounded text-xs text-[var(--accent)]">groups</span>
+                  {community.name}
+                </span>
+              ))
+            )}
+          </div>
+        </section>
+
+        <section className="py-4">
           <h3 className="text-sm font-semibold">よく行くエリア</h3>
           <div className="mt-2 flex flex-wrap gap-2">
             {(profile.favoriteAreas ?? []).length === 0 ? (

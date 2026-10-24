@@ -10,20 +10,25 @@ type Friend = {
   avatarIcon?: string | null;
   area?: string | null;
   isFavorite?: boolean;
+  communities?: { id: string; name: string }[];
 };
 
 type Favorite = { userId: string; displayName: string; avatarIcon?: string | null };
+type Community = { id: string; name: string };
 
 export default function FriendsPage() {
   const [userId, setUserId] = useState<string | null>(null);
   const [friends, setFriends] = useState<Friend[]>([]);
   const [favorites, setFavorites] = useState<Favorite[]>([]);
+  const [communities, setCommunities] = useState<Community[]>([]);
+  const [selectedCommunityFilter, setSelectedCommunityFilter] = useState<string>("all");
   const [search, setSearch] = useState("");
 
   const loadData = async (currentUserId: string) => {
-    const [friendsResponse, favoritesResponse] = await Promise.all([
+    const [friendsResponse, favoritesResponse, communitiesResponse] = await Promise.all([
       fetch(`/api/friends?userId=${currentUserId}`),
       fetch(`/api/favorites?userId=${currentUserId}`),
+      fetch(`/api/communities?userId=${currentUserId}&userOnly=true`),
     ]);
 
     if (friendsResponse.ok) {
@@ -31,6 +36,9 @@ export default function FriendsPage() {
     }
     if (favoritesResponse.ok) {
       setFavorites((await favoritesResponse.json()) as Favorite[]);
+    }
+    if (communitiesResponse.ok) {
+      setCommunities((await communitiesResponse.json()) as Community[]);
     }
   };
 
@@ -53,12 +61,20 @@ export default function FriendsPage() {
   );
 
   const filteredFriends = useMemo(() => {
+    let result = friends;
+    if (selectedCommunityFilter !== "all") {
+      result = result.filter((friend) =>
+        friend.communities?.some((c) => c.id === selectedCommunityFilter)
+      );
+    }
     const keyword = search.trim().toLowerCase();
-    if (!keyword) return friends;
-    return friends.filter((friend) =>
-      friend.displayName.toLowerCase().includes(keyword)
-    );
-  }, [friends, search]);
+    if (keyword) {
+      result = result.filter((friend) =>
+        friend.displayName.toLowerCase().includes(keyword)
+      );
+    }
+    return result;
+  }, [friends, search, selectedCommunityFilter]);
 
   const toggleFavorite = async (friendId: string) => {
     if (!userId) return;
@@ -96,6 +112,43 @@ export default function FriendsPage() {
               className="w-full rounded-full bg-white px-4 py-2 text-sm shadow-sm"
             />
           </div>
+
+          {/* 所属コミュニティ絞り込み */}
+          {communities.length > 0 && (
+            <div className="mb-5">
+              <p className="mb-1.5 text-xs font-semibold text-[var(--muted)]">所属で絞り込む</p>
+              <div className="flex items-center gap-2 overflow-x-auto pb-1 no-scrollbar">
+                <button
+                  type="button"
+                  aria-pressed={selectedCommunityFilter === "all"}
+                  onClick={() => setSelectedCommunityFilter("all")}
+                  className={`rounded-full px-3 py-1.5 text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer ${
+                    selectedCommunityFilter === "all"
+                      ? "bg-[var(--accent)] text-white shadow-sm"
+                      : "bg-white text-[var(--muted)] border border-orange-100 hover:bg-orange-50"
+                  }`}
+                >
+                  オール
+                </button>
+                {communities.map((comm) => (
+                  <button
+                    key={comm.id}
+                    type="button"
+                    aria-pressed={selectedCommunityFilter === comm.id}
+                    onClick={() => setSelectedCommunityFilter(comm.id)}
+                    className={`inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-semibold whitespace-nowrap transition-colors cursor-pointer ${
+                      selectedCommunityFilter === comm.id
+                        ? "bg-[var(--accent)] text-white shadow-sm"
+                        : "bg-white text-[var(--muted)] border border-orange-100 hover:bg-orange-50"
+                    }`}
+                  >
+                    <span className="material-symbols-rounded text-xs">groups</span>
+                    {comm.name}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {filteredFriends.length === 0 ? (
               <div className="rounded-3xl border border-dashed border-orange-200 bg-white/80 p-8 text-center text-sm text-[var(--muted)]">
@@ -148,6 +201,18 @@ export default function FriendsPage() {
                           {friend.displayName}
                         </p>
                         <p className="mt-1 text-xs text-[var(--muted)]">{friend.area ?? "エリア未設定"}</p>
+                        {friend.communities && friend.communities.length > 0 && (
+                          <div className="mt-1 flex flex-wrap gap-1">
+                            {friend.communities.map((c) => (
+                              <span
+                                key={c.id}
+                                className="inline-flex items-center gap-0.5 rounded bg-orange-50 px-1.5 py-0.5 text-[10px] font-medium text-[var(--accent)] border border-orange-100"
+                              >
+                                {c.name}
+                              </span>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     </div>
                   </Link>
