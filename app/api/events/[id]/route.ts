@@ -102,8 +102,8 @@ export async function GET(
       return NextResponse.json({ message: "コミュニティメンバーのみ閲覧できます" }, { status: 403 });
     }
     const isOwner = event.ownerId === viewerId;
-    const isParticipant = event.participants.some((p: any) => p.userId === viewerId);
-    const isInvited = event.invites.some((i: any) => i.inviteeId === viewerId);
+    const isParticipant = event.participants.some((p) => p.userId === viewerId);
+    const isInvited = event.invites.some((i) => i.inviteeId === viewerId);
     let isMember = false;
     if (event.communityId) {
       const membership = await prisma.communityMember.findUnique({

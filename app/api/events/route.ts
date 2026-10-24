@@ -170,8 +170,8 @@ export async function GET(request: Request) {
         select: { communityId: true },
       }),
     ]);
-    favoriteOwnerIds = new Set(favorites.map((favorite: any) => favorite.favoriteUserId));
-    viewerCommunityIds = new Set(memberships.map((membership: any) => membership.communityId));
+    favoriteOwnerIds = new Set(favorites.map((favorite) => favorite.favoriteUserId));
+    viewerCommunityIds = new Set(memberships.map((membership) => membership.communityId));
   }
 
   const formatted = events
