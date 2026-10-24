@@ -10,7 +10,8 @@ import { formatEventStartLabel } from "@/lib/datetime";
 type EventSummary = {
   id: string;
   purpose: string;
-  visibility: "public" | "limited" | "private";
+  visibility: "public" | "limited" | "private" | "community";
+  community?: { id: string; name: string } | null;
   capacity: number;
   status: "open" | "confirmed" | "completed" | "cancelled";
   scheduleMode: "fixed" | "candidate";
@@ -220,12 +221,22 @@ function EventListItem({ event }: { event: EventSummary }) {
       href={`/events/${event.id}`}
       className="flex items-center gap-3 rounded-2xl border border-orange-100 bg-white p-4 shadow-sm"
     >
-      <div className="grid h-11 w-11 place-items-center rounded-2xl bg-orange-100 text-[var(--accent)]">
-        <span className="material-symbols-rounded">event</span>
+      <div className="grid h-11 w-11 place-items-center rounded-2xl bg-orange-100 text-[var(--accent)] shrink-0">
+        <span className="material-symbols-rounded">
+          {event.visibility === "community" ? "diversity_3" : "event"}
+        </span>
       </div>
       <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-semibold text-[var(--foreground)]">{event.purpose}</p>
-        <div className="flex items-center gap-2 text-xs text-[var(--muted)]">
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {event.visibility === "community" && (
+            <span className="inline-flex items-center gap-0.5 rounded-md bg-orange-50 px-1.5 py-0.5 text-[10px] font-semibold text-[var(--accent)] border border-orange-200">
+              <span className="material-symbols-rounded text-[11px]">groups</span>
+              {event.community?.name ?? "コミュニティ"}
+            </span>
+          )}
+          <p className="truncate text-sm font-semibold text-[var(--foreground)]">{event.purpose}</p>
+        </div>
+        <div className="flex items-center gap-2 text-xs text-[var(--muted)] mt-0.5">
           <AvatarName displayName={event.owner.displayName} avatarIcon={event.owner.avatarIcon} className="max-w-[60%]" textClassName="truncate" />
           <span>・{primaryTime}</span>
         </div>

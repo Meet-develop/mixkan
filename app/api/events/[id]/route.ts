@@ -77,6 +77,7 @@ export async function GET(
     where: { id },
     include: {
       owner: true,
+      community: true,
       participants: { include: { user: true } },
       inviteRequests: {
         where: { status: "pending" },
@@ -94,6 +95,25 @@ export async function GET(
 
   if (!event) {
     return NextResponse.json({ message: "Not found" }, { status: 404 });
+  }
+
+  if (event.visibility === "community") {
+    if (!viewerId) {
+      return NextResponse.json({ message: "コミュニティメンバーのみ閲覧できます" }, { status: 403 });
+    }
+    const isOwner = event.ownerId === viewerId;
+    const isParticipant = event.participants.some((p: any) => p.userId === viewerId);
+    const isInvited = event.invites.some((i: any) => i.inviteeId === viewerId);
+    let isMember = false;
+    if (event.communityId) {
+      const membership = await prisma.communityMember.findUnique({
+        where: { communityId_userId: { communityId: event.communityId, userId: viewerId } },
+      });
+      isMember = Boolean(membership);
+    }
+    if (!isOwner && !isParticipant && !isInvited && !isMember) {
+      return NextResponse.json({ message: "このコミュニティのメンバーのみ閲覧できます" }, { status: 403 });
+    }
   }
 
   const inviterByInviteeId = new Map<
@@ -240,6 +260,12 @@ export async function GET(
       comment: eventComment,
       area: eventArea,
       visibility: event.visibility,
+      community: event.community
+        ? {
+            id: event.community.id,
+            name: event.community.name,
+          }
+        : null,
       capacity: event.capacity,
       status: event.status,
       scheduleMode: event.scheduleMode,
@@ -277,7 +303,8 @@ export async function PATCH(
     purpose?: string;
     comment?: string;
     eventArea?: string;
-    visibility?: "public" | "limited" | "private";
+    visibility?: "public" | "limited" | "private" | "community";
+    communityId?: string | null;
     capacity?: number;
     timeSetting?: "auto" | "manual";
     placeSetting?: "auto" | "manual";
@@ -323,7 +350,8 @@ export async function PATCH(
     purpose?: string;
     comment?: string | null;
     area?: string | null;
-    visibility?: "public" | "limited" | "private";
+    visibility?: "public" | "limited" | "private" | "community";
+    communityId?: string | null;
     capacity?: number;
     scheduleMode?: "fixed" | "candidate";
     fixedStartTime?: Date | null;
@@ -373,9 +401,17 @@ export async function PATCH(
   if (
     body.visibility === "public" ||
     body.visibility === "limited" ||
-    body.visibility === "private"
+    body.visibility === "private" ||
+    body.visibility === "community"
   ) {
     updateData.visibility = body.visibility;
+    if (body.visibility === "community" && body.communityId !== undefined) {
+      updateData.communityId = body.communityId;
+    } else if (body.visibility !== "community") {
+      updateData.communityId = null;
+    }
+  } else if (body.communityId !== undefined) {
+    updateData.communityId = body.communityId;
   }
 
   if (typeof body.capacity === "number" && Number.isFinite(body.capacity)) {
