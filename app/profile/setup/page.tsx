@@ -881,7 +881,7 @@ export default function ProfileSetupPage() {
 
       <main className="mx-auto max-w-md px-4 py-6 sm:max-w-4xl sm:px-6">
         <div className="pt-2">
-          <div className="rounded-3xl border border-orange-100/70 p-5">
+          <div className="rounded-3xl p-5">
             <div className="flex flex-col items-center text-center">
               <div className="relative">
                 <div
