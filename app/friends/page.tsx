@@ -98,7 +98,7 @@ export default function FriendsPage() {
           </div>
 
           {filteredFriends.length === 0 ? (
-              <div className="rounded-3xl border border-dashed border-orange-200 bg-white/80 p-8 text-center text-sm text-[var(--muted)]">
+              <div className="rounded-2xl border border-dashed border-gray-300 bg-white/80 p-8 text-center text-sm text-[var(--muted)]">
                 <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-2xl bg-orange-100 text-[var(--accent)]">
                   <span className="material-symbols-rounded">group</span>
                 </div>

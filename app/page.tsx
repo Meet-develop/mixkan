@@ -191,7 +191,7 @@ export default function HomePage() {
                 読み込み中...
               </div>
             ) : section.events.length === 0 ? (
-              <div className="rounded-3xl border border-dashed border-orange-200 bg-white/80 p-8 text-center text-sm text-[var(--muted)]">
+              <div className="rounded-2xl border border-dashed border-gray-300 bg-white/80 p-8 text-center text-sm text-[var(--muted)]">
                 {section.emptyMessage}
               </div>
             ) : (
