@@ -100,7 +100,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ja">
+    <html lang="ja" className={`${zenMaruGothic.variable} ${spaceMono.variable}`}>
       <head>
         {/* App Router のルートレイアウトは全ページ共通のため no-page-custom-font は誤検知。アイコンフォントはリガチャ文字の表示を防ぐため display=block を指定 */}
         {/* eslint-disable-next-line @next/next/no-page-custom-font, @next/next/google-font-display */}
@@ -110,7 +110,7 @@ export default function RootLayout({
         />
       </head>
       <body
-        className={`${zenMaruGothic.variable} ${spaceMono.variable} bg-[var(--background)] antialiased pb-24 md:pb-0`}
+        className={`bg-[var(--background)] antialiased pb-24 md:pb-0`}
       >
         <script
           type="application/ld+json"
