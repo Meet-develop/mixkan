@@ -191,7 +191,7 @@ export function AuthOverlay({
             <button
               onClick={handleLineLogin}
               disabled={!hasSupabaseConfig}
-              className="group relative mt-4 flex h-12 w-full items-center overflow-hidden rounded-xl border border-transparent bg-[#06C755] text-white shadow-sm disabled:border-[rgba(229,229,229,0.6)] disabled:bg-white disabled:text-[rgba(30,30,30,0.2)]"
+              className="group relative mt-4 flex h-12 w-full items-center overflow-hidden rounded-xl border border-transparent bg-[#06C755] text-white shadow-sm disabled:bg-white disabled:text-[rgba(30,30,30,0.2)]"
             >
               <span className="pointer-events-none absolute inset-0 bg-black/0 transition-colors group-hover:bg-black/10 group-active:bg-black/30 group-disabled:bg-transparent" />
 
