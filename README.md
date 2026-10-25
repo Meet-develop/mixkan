@@ -191,8 +191,8 @@ Supabase SQL Editor で [supabase/profiles_rls.sql](supabase/profiles_rls.sql) �
 アプリ本体は `BYPASSRLS` を持つ `postgres` ロール経由の Prisma で接続するため影響を受けません。
 
 - 新しいテーブルを追加する migration では、必ず `ENABLE ROW LEVEL SECURITY` も含めてください。
-- `FORCE ROW LEVEL SECURITY` は付けないでください（オーナーにも効いて Prisma が止まります）。
-- 緊急時のロールバック: `ALTER TABLE public.<table> DISABLE ROW LEVEL SECURITY;`
+- `FORCE ROW LEVEL SECURITY` は付けないでください（`BYPASSRLS` を持たないオーナーロールで接続すると、ポリシーなしで全拒否になるため。現行の `postgres` は影響しませんが、ロール変更時のリスクを避けます）。
+- 緊急時のロールバック: `ALTER TABLE public.<table> DISABLE ROW LEVEL SECURITY;`（`profiles` は own-row ポリシーで保護されているため対象外。DISABLE すると anon から読み書きできてしまいます）
 
 ### 6. Storage 設定（ユーザーアイコン）
 
