@@ -1,15 +1,16 @@
 import type { Metadata, Viewport } from "next";
-import { Sora, Space_Mono } from "next/font/google";
+import { Noto_Sans_JP, Space_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 import { GoogleAnalytics } from "@/components/google-analytics";
 import { MobileBottomNav } from "@/components/navigation/mobile-bottom-nav";
 import { getMetadataBaseUrl } from "@/lib/site-url";
 
-const sora = Sora({
-  variable: "--font-sora",
+const notoSansJP = Noto_Sans_JP({
+  variable: "--font-noto-sans-jp",
   subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700"],
+  display: "swap",
+  preload: false,
 });
 
 const spaceMono = Space_Mono({
@@ -98,7 +99,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ja">
+    <html lang="ja" className={`${notoSansJP.variable} ${spaceMono.variable}`}>
       <head>
         {/* App Router のルートレイアウトは全ページ共通のため no-page-custom-font は誤検知。アイコンフォントはリガチャ文字の表示を防ぐため display=block を指定 */}
         {/* eslint-disable-next-line @next/next/no-page-custom-font, @next/next/google-font-display */}
@@ -108,7 +109,7 @@ export default function RootLayout({
         />
       </head>
       <body
-        className={`${sora.variable} ${spaceMono.variable} bg-[var(--background)] antialiased pb-24 md:pb-0`}
+        className={`bg-[var(--background)] antialiased pb-24 md:pb-0`}
       >
         <script
           type="application/ld+json"
