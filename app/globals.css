@@ -8,7 +8,7 @@
   --accent: #ff6a00;
   --accent-2: #ff9d2d;
   --accent-3: #c87d2c;
-  --font-app: var(--font-m-plus-rounded-1c), "Hiragino Maru Gothic ProN", "Hiragino Sans", "Yu Gothic", sans-serif;
+  --font-app: var(--font-noto-sans-jp), "Hiragino Sans", "Yu Gothic", sans-serif;
 }
 
 @theme inline {
