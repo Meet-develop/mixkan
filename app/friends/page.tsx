@@ -112,7 +112,7 @@ export default function FriendsPage() {
               {filteredFriends.map((friend) => (
                 <li
                   key={friend.userId}
-                  className="flex items-center gap-3 rounded-2xl bg-white p-4 shadow-sm"
+                  className="flex items-center gap-3 rounded-2xl bg-white p-4 shadow-card"
                 >
                   <Link href={`/profile/${friend.userId}`} className="min-w-0 flex-1">
                     <div className="flex min-w-0 items-center gap-3">

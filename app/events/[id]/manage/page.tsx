@@ -467,7 +467,7 @@ export default function EventManagePage() {
           </button>
           <Link
             href={`/events/new?editEventId=${event.id}`}
-            className="mt-3 flex w-full items-center justify-center gap-2 rounded-full border border-[var(--line)] bg-white px-6 py-3 text-sm font-semibold text-[var(--foreground)]"
+            className="mt-3 flex w-full items-center justify-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-semibold text-[var(--foreground)] shadow-card"
           >
             <span className="material-symbols-rounded">edit</span>
             編集する
@@ -487,7 +487,7 @@ export default function EventManagePage() {
               !ownerId ||
               event.owner.userId !== ownerId
             }
-            className="mt-3 flex w-full items-center justify-center gap-2 rounded-full border border-rose-300 px-6 py-3 text-sm font-semibold text-rose-600 disabled:cursor-not-allowed disabled:opacity-60"
+            className="mt-3 flex w-full items-center justify-center gap-2 rounded-full bg-white px-6 py-3 text-sm font-semibold text-rose-600 shadow-card disabled:cursor-not-allowed disabled:opacity-60"
           >
             <span className="material-symbols-rounded">delete</span>
             {isDeleting ? "削除中..." : "イベントを削除"}
