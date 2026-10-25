@@ -186,6 +186,14 @@ docker compose exec app npm run db:seed:nonlocal
 
 Supabase SQL Editor で [supabase/profiles_rls.sql](supabase/profiles_rls.sql) を実行してください。
 
+その他の `public` テーブルは Prisma migration（`prisma/migrations/*_enable_rls`）で RLS が有効化されます（`npm run db:migrate`）。
+ポリシーは付けていないため、Supabase の REST/GraphQL API（anon / authenticated）からは読み書きできません。
+アプリ本体は `BYPASSRLS` を持つ `postgres` ロール経由の Prisma で接続するため影響を受けません。
+
+- 新しいテーブルを追加する migration では、必ず `ENABLE ROW LEVEL SECURITY` も含めてください。
+- `FORCE ROW LEVEL SECURITY` は付けないでください（オーナーにも効いて Prisma が止まります）。
+- 緊急時のロールバック: `ALTER TABLE public.<table> DISABLE ROW LEVEL SECURITY;`
+
 ### 6. Storage 設定（ユーザーアイコン）
 
 Supabase SQL Editor で [supabase/storage_avatars.sql](supabase/storage_avatars.sql) を実行してください。
