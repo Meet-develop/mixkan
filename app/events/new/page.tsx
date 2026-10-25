@@ -997,7 +997,7 @@ function EventCreatePageContent() {
                 )}
 
                 {eventAreaOptions.length === 0 ? (
-                  <div className="mt-3 rounded-2xl border border-dashed border-gray-300 bg-white/80 px-4 py-5 text-center text-xs text-[var(--muted)]">
+                  <div className="mt-3 rounded-2xl border border-dashed border-[var(--muted)] bg-white/80 px-4 py-5 text-center text-xs text-[var(--muted)]">
                     「＋」からイベントで使うエリアを追加してください。
                   </div>
                 ) : (

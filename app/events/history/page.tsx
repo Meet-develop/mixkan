@@ -137,7 +137,7 @@ export default function EventHistoryPage() {
             読み込み中...
           </div>
         ) : sortedHistory.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-gray-300 bg-white/80 p-8 text-center text-sm text-[var(--muted)]">
+          <div className="rounded-2xl border border-dashed border-[var(--muted)] bg-white/80 p-8 text-center text-sm text-[var(--muted)]">
             参加履歴はまだありません。
           </div>
         ) : (

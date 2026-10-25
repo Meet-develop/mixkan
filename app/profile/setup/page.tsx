@@ -1046,7 +1046,7 @@ export default function ProfileSetupPage() {
               </p>
 
               {favoriteAreas.length === 0 ? (
-                <div className="mt-3 rounded-2xl border border-dashed border-gray-300 bg-white/80 px-4 py-5 text-center text-xs text-[var(--muted)]">
+                <div className="mt-3 rounded-2xl border border-dashed border-[var(--muted)] bg-white/80 px-4 py-5 text-center text-xs text-[var(--muted)]">
                   「＋」からエリアを追加してください。
                 </div>
               ) : (
@@ -1102,7 +1102,7 @@ export default function ProfileSetupPage() {
               <p className="mt-1 text-xs text-[var(--muted)]">画像・名称・住所で一覧表示されます。</p>
 
               {frequentPlaces.length === 0 ? (
-                <div className="mt-3 rounded-2xl border border-dashed border-gray-300 bg-white/80 px-4 py-5 text-center text-xs text-[var(--muted)]">
+                <div className="mt-3 rounded-2xl border border-dashed border-[var(--muted)] bg-white/80 px-4 py-5 text-center text-xs text-[var(--muted)]">
                   「＋」からよく行くお店を追加してください。
                 </div>
               ) : (
