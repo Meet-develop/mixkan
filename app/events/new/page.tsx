@@ -739,7 +739,7 @@ function EventCreatePageContent() {
 
   return (
     <div className="min-h-screen pb-4">
-      <header className="sticky top-0 z-40 border-b border-orange-100 bg-white/95 backdrop-blur">
+      <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-xl shadow-sm">
         <div className="mx-auto flex max-w-md items-center gap-3 px-4 py-4 sm:max-w-5xl sm:px-6">
           <Link
             href="/"
