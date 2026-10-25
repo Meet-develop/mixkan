@@ -90,7 +90,7 @@ type PlaceResult = {
 };
 
 const plusButtonClass =
-  "grid h-7 w-7 place-items-center rounded-full border border-dashed border-gray-400 bg-gray-50 text-gray-500";
+  "grid h-7 w-7 place-items-center rounded-full bg-gray-50 text-gray-500 shadow-card";
 
 const PLACE_CATEGORIES = ["居酒屋", "カフェ", "レストラン", "バー", "焼肉"];
 
@@ -1217,7 +1217,7 @@ export default function EventDetailPage() {
                     type="button"
                     onClick={handleCalendarDownload}
                     disabled={hasRegisteredCalendar || isCalendarDownloading}
-                    className="flex w-full items-center justify-center gap-2 rounded-full border-2 border-orange-500 bg-white px-4 py-2 text-xs font-semibold text-orange-500 transition-colors hover:bg-orange-50 disabled:cursor-not-allowed disabled:border-gray-300 disabled:bg-gray-100 disabled:text-gray-500 disabled:shadow-none disabled:hover:bg-gray-100"
+                    className="flex w-full items-center justify-center gap-2 rounded-full bg-white px-4 py-2 text-xs font-semibold text-orange-500 shadow-card transition-colors hover:bg-orange-50 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500 disabled:shadow-none disabled:hover:bg-gray-100"
                   >
                     <span className="material-symbols-rounded">calendar_add_on</span>
                     {isCalendarDownloading ? "登録中..." : "カレンダーに登録"}
@@ -1238,7 +1238,7 @@ export default function EventDetailPage() {
                     type="button"
                     onClick={handleCalendarDownload}
                     disabled={hasRegisteredCalendar || isCalendarDownloading}
-                    className="flex w-full items-center justify-center gap-2 rounded-full border-2 border-orange-500 bg-white px-4 py-2 text-xs font-semibold text-orange-500 transition-colors hover:bg-orange-50 disabled:cursor-not-allowed disabled:border-gray-300 disabled:bg-gray-100 disabled:text-gray-500 disabled:shadow-none disabled:hover:bg-gray-100"
+                    className="flex w-full items-center justify-center gap-2 rounded-full bg-white px-4 py-2 text-xs font-semibold text-orange-500 shadow-card transition-colors hover:bg-orange-50 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500 disabled:shadow-none disabled:hover:bg-gray-100"
                   >
                     <span className="material-symbols-rounded">calendar_add_on</span>
                     {isCalendarDownloading ? "登録中..." : "カレンダーに登録"}
@@ -1870,7 +1870,7 @@ export default function EventDetailPage() {
               <button
                 onClick={() => handleShare()}
                 disabled={!canAccessParticipantActions}
-                className="flex w-full items-center justify-center gap-2 rounded-full bg-white border-2 border-gray-200 hover:bg-gray-50 px-4 py-2 text-sm font-semibold text-[var(--foreground)] disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
+                className="flex w-full items-center justify-center gap-2 rounded-full bg-white shadow-card hover:bg-gray-50 px-4 py-2 text-sm font-semibold text-[var(--foreground)] disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
               >
                 <span className="material-symbols-rounded">share</span>
                 外部アプリで招待する

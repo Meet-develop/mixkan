@@ -98,7 +98,7 @@ export default function FriendsPage() {
           </div>
 
           {filteredFriends.length === 0 ? (
-              <div className="rounded-3xl border border-dashed border-orange-200 bg-white/80 p-8 text-center text-sm text-[var(--muted)]">
+              <div className="rounded-2xl border border-dashed border-[var(--muted)]/40 bg-white/80 p-8 text-center text-sm text-[var(--muted)]">
                 <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-2xl bg-orange-100 text-[var(--accent)]">
                   <span className="material-symbols-rounded">group</span>
                 </div>
@@ -112,7 +112,7 @@ export default function FriendsPage() {
               {filteredFriends.map((friend) => (
                 <li
                   key={friend.userId}
-                  className="flex items-center gap-3 rounded-2xl border border-orange-100 bg-white p-4 shadow-sm"
+                  className="flex items-center gap-3 rounded-2xl bg-white p-4 shadow-card"
                 >
                   <Link href={`/profile/${friend.userId}`} className="min-w-0 flex-1">
                     <div className="flex min-w-0 items-center gap-3">

@@ -117,7 +117,7 @@ const dayLabels: Record<WeekdayKey, string> = {
 };
 
 const plusButtonClass =
-  "grid h-7 w-7 place-items-center rounded-full border border-dashed border-gray-400 bg-gray-50 text-gray-500";
+  "grid h-7 w-7 place-items-center rounded-full bg-gray-50 text-gray-500 shadow-card";
 
 const defaultStats: ProfileStats = {
   hostedCount: 0,
@@ -866,7 +866,7 @@ export default function ProfileSetupPage() {
 
   return (
     <div className="min-h-screen pb-4">
-      <header className="sticky top-0 z-40 border-b border-orange-100 bg-white/95 backdrop-blur">
+      <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-xl shadow-sm">
         <div className="mx-auto flex max-w-md items-center gap-3 px-4 py-4 sm:max-w-4xl sm:px-6">
           <Link
             href="/"
@@ -881,7 +881,7 @@ export default function ProfileSetupPage() {
 
       <main className="mx-auto max-w-md px-4 py-6 sm:max-w-4xl sm:px-6">
         <div className="pt-2">
-          <div className="rounded-3xl border border-orange-100/70 p-5">
+          <div className="rounded-3xl p-5">
             <div className="flex flex-col items-center text-center">
               <div className="relative">
                 <div
@@ -1046,7 +1046,7 @@ export default function ProfileSetupPage() {
               </p>
 
               {favoriteAreas.length === 0 ? (
-                <div className="mt-3 rounded-2xl border border-dashed border-orange-200 bg-white/80 px-4 py-5 text-center text-xs text-[var(--muted)]">
+                <div className="mt-3 rounded-2xl border border-dashed border-[var(--muted)]/40 bg-white/80 px-4 py-5 text-center text-xs text-[var(--muted)]">
                   「＋」からエリアを追加してください。
                 </div>
               ) : (
@@ -1102,7 +1102,7 @@ export default function ProfileSetupPage() {
               <p className="mt-1 text-xs text-[var(--muted)]">画像・名称・住所で一覧表示されます。</p>
 
               {frequentPlaces.length === 0 ? (
-                <div className="mt-3 rounded-2xl border border-dashed border-orange-200 bg-white/80 px-4 py-5 text-center text-xs text-[var(--muted)]">
+                <div className="mt-3 rounded-2xl border border-dashed border-[var(--muted)]/40 bg-white/80 px-4 py-5 text-center text-xs text-[var(--muted)]">
                   「＋」からよく行くお店を追加してください。
                 </div>
               ) : (

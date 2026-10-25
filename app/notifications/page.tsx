@@ -83,7 +83,7 @@ export default function NotificationsPage() {
           </div>
 
           {notifications.length === 0 ? (
-            <div className="rounded-3xl border border-dashed border-orange-200 bg-white/80 p-8 text-center text-sm text-[var(--muted)]">
+            <div className="rounded-2xl border border-dashed border-[var(--muted)]/40 bg-white/80 p-8 text-center text-sm text-[var(--muted)]">
               <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-2xl bg-orange-100 text-[var(--accent)]">
                 <span className="material-symbols-rounded">notifications</span>
               </div>
@@ -96,7 +96,7 @@ export default function NotificationsPage() {
                 <li key={notification.id}>
                   <Link
                     href={`/notifications/${notification.id}`}
-                    className="flex items-start gap-3 rounded-2xl border border-orange-100 bg-white p-4 shadow-sm transition hover:border-orange-200"
+                    className="flex items-start gap-3 rounded-2xl bg-white p-4 shadow-card"
                   >
                     <div className="grid h-11 w-11 place-items-center rounded-2xl bg-orange-100 text-[var(--accent)]">
                       <span className="material-symbols-rounded">
