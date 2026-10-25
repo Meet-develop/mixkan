@@ -13,7 +13,7 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-zen-maru-gothic), "Hiragino Maru Gothic ProN", "Hiragino Sans", "Yu Gothic", sans-serif;
+  --font-sans: var(--font-m-plus-rounded-1c), "Hiragino Maru Gothic ProN", "Hiragino Sans", "Yu Gothic", sans-serif;
   --font-mono: var(--font-space-mono);
 }
 

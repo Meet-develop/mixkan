@@ -1,13 +1,13 @@
 import type { Metadata, Viewport } from "next";
-import { Zen_Maru_Gothic, Space_Mono } from "next/font/google";
+import { M_PLUS_Rounded_1c, Space_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 import { GoogleAnalytics } from "@/components/google-analytics";
 import { MobileBottomNav } from "@/components/navigation/mobile-bottom-nav";
 import { getMetadataBaseUrl } from "@/lib/site-url";
 
-const zenMaruGothic = Zen_Maru_Gothic({
-  variable: "--font-zen-maru-gothic",
+const mPlusRounded1c = M_PLUS_Rounded_1c({
+  variable: "--font-m-plus-rounded-1c",
   subsets: ["latin"],
   weight: ["400", "500", "700"],
   display: "swap",
@@ -100,7 +100,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="ja" className={`${zenMaruGothic.variable} ${spaceMono.variable}`}>
+    <html lang="ja" className={`${mPlusRounded1c.variable} ${spaceMono.variable}`}>
       <head>
         {/* App Router のルートレイアウトは全ページ共通のため no-page-custom-font は誤検知。アイコンフォントはリガチャ文字の表示を防ぐため display=block を指定 */}
         {/* eslint-disable-next-line @next/next/no-page-custom-font, @next/next/google-font-display */}
