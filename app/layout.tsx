@@ -1,15 +1,17 @@
 import type { Metadata, Viewport } from "next";
-import { Sora, Space_Mono } from "next/font/google";
+import { Zen_Maru_Gothic, Space_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/providers";
 import { GoogleAnalytics } from "@/components/google-analytics";
 import { MobileBottomNav } from "@/components/navigation/mobile-bottom-nav";
 import { getMetadataBaseUrl } from "@/lib/site-url";
 
-const sora = Sora({
-  variable: "--font-sora",
+const zenMaruGothic = Zen_Maru_Gothic({
+  variable: "--font-zen-maru-gothic",
   subsets: ["latin"],
-  weight: ["300", "400", "500", "600", "700"],
+  weight: ["400", "500", "700", "900"],
+  display: "swap",
+  preload: false,
 });
 
 const spaceMono = Space_Mono({
@@ -108,7 +110,7 @@ export default function RootLayout({
         />
       </head>
       <body
-        className={`${sora.variable} ${spaceMono.variable} bg-[var(--background)] antialiased pb-24 md:pb-0`}
+        className={`${zenMaruGothic.variable} ${spaceMono.variable} bg-[var(--background)] antialiased pb-24 md:pb-0`}
       >
         <script
           type="application/ld+json"
