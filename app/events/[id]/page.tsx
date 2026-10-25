@@ -1870,7 +1870,7 @@ export default function EventDetailPage() {
               <button
                 onClick={() => handleShare()}
                 disabled={!canAccessParticipantActions}
-                className="flex w-full items-center justify-center gap-2 rounded-full bg-white border-2 border-gray-200 hover:bg-gray-50 px-4 py-2 text-sm font-semibold text-[var(--foreground)] disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
+                className="flex w-full items-center justify-center gap-2 rounded-full bg-white shadow-card hover:bg-gray-50 px-4 py-2 text-sm font-semibold text-[var(--foreground)] disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
               >
                 <span className="material-symbols-rounded">share</span>
                 外部アプリで招待する
