@@ -105,7 +105,7 @@ const settingOptions: Array<{
 ];
 
 const plusButtonClass =
-  "grid h-7 w-7 place-items-center rounded-full border border-dashed border-gray-400 bg-gray-50 text-gray-500";
+  "grid h-7 w-7 place-items-center rounded-full bg-gray-50 text-gray-500 shadow-card";
 
 const buildAutoTitle = (elements: string[]) => {
   if (elements.length === 0) return "";
