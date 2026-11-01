@@ -110,8 +110,27 @@ enum NotificationType {
   join_requested
   join_approved
   friend_added
+  event_updated
+  event_cancelled
+  join_declined
+  event_reminder_day_before
+  event_reminder_hour_before
+  invite_reminder
 
   @@map("notification_type")
+}
+
+enum NotificationCategory {
+  invite
+  event_confirmed
+  reminder_day_before
+  reminder_hour_before
+  invite_reminder
+  participation
+  event_update
+  other
+
+  @@map("notification_category")
 }
 
 model Profile {
@@ -145,6 +164,8 @@ model Profile {
   timeVotes      EventTimeVote[]
   placeVotes     EventPlaceVote[]
   notifications  Notification[]
+  pushSubscriptions PushSubscription[]
+  notificationPreferences NotificationPreference[]
 
   @@map("profiles")
 }
@@ -335,5 +356,34 @@ model Notification {
   user      Profile          @relation(fields: [userId], references: [userId], onDelete: Cascade)
   event     Event?           @relation(fields: [eventId], references: [id], onDelete: SetNull)
 
+  @@index([userId, type, eventId])
   @@map("notifications")
+}
+
+model PushSubscription {
+  id         String   @id @default(uuid()) @db.Uuid
+  userId     String   @map("user_id") @db.Uuid
+  endpoint   String   @unique
+  p256dh     String
+  auth       String
+  userAgent  String?  @map("user_agent")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  user       Profile  @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("push_subscriptions")
+}
+
+model NotificationPreference {
+  userId     String               @map("user_id") @db.Uuid
+  category   NotificationCategory
+  enabled    Boolean              @default(true)
+  updatedAt  DateTime             @updatedAt @map("updated_at")
+
+  user       Profile              @relation(fields: [userId], references: [userId], onDelete: Cascade)
+
+  @@id([userId, category])
+  @@map("notification_preferences")
 }

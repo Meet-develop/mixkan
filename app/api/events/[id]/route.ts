@@ -667,7 +667,7 @@ export async function PATCH(
     await createAppNotifications(
       notifyUserIds.map((userId: string) => ({
         userId,
-        type: "event_confirmed",
+        type: "event_updated",
         title: "イベント情報が更新されました",
         body: `「${updated.purpose}」の内容が更新されました。`,
         message: `「${updated.purpose}」の内容が更新されました。`,
@@ -718,7 +718,7 @@ export async function DELETE(
     await createAppNotifications(
       notifyUserIds.map((userId: string) => ({
         userId,
-        type: "invite_received",
+        type: "event_cancelled",
         title: "イベントが削除されました",
         body: `「${event.purpose}」は主催者により削除されました。`,
         message: `「${event.purpose}」は主催者により削除されました。`,

@@ -27,6 +27,12 @@ const defaultTitleByType: Record<string, string> = {
   join_requested: "参加申請のお知らせ",
   join_approved: "参加承認のお知らせ",
   friend_added: "プロフィール登録のお願い",
+  event_updated: "イベント情報の更新",
+  event_cancelled: "イベント中止のお知らせ",
+  join_declined: "参加申請の結果",
+  event_reminder_day_before: "明日のイベント",
+  event_reminder_hour_before: "まもなく開始",
+  invite_reminder: "招待への回答のお願い",
 };
 
 export const notificationTypeIcon: Record<string, string> = {
@@ -35,6 +41,12 @@ export const notificationTypeIcon: Record<string, string> = {
   join_requested: "person_add",
   join_approved: "how_to_reg",
   friend_added: "group",
+  event_updated: "edit_calendar",
+  event_cancelled: "event_busy",
+  join_declined: "person_off",
+  event_reminder_day_before: "event_upcoming",
+  event_reminder_hour_before: "alarm",
+  invite_reminder: "pending_actions",
 };
 
 const resolveNotificationAction = (
@@ -49,7 +61,18 @@ const resolveNotificationAction = (
       };
     }
 
-    if (type === "event_confirmed") {
+    if (type === "invite_received" || type === "invite_reminder") {
+      return {
+        actionHref: `/events/${eventId}`,
+        actionLabel: "招待に回答する",
+      };
+    }
+
+    if (
+      type === "event_confirmed" ||
+      type === "event_reminder_day_before" ||
+      type === "event_reminder_hour_before"
+    ) {
       return {
         actionHref: `/events/${eventId}`,
         actionLabel: "開催情報を見る",
