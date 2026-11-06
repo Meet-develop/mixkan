@@ -25,7 +25,7 @@
   ],
   "packageRules": [
     {
-      "description": "npm のマイナー・パッチ更新を1つのPRにまとめる",
+      "description": "npm のマイナー・パッチ更新を1つのPRにまとめる（後続の個別パッケージルールで上書きされるため先頭に配置）",
       "matchManagers": [
         "npm"
       ],
@@ -41,6 +41,14 @@
         "github-actions"
       ],
       "groupName": "github-actions"
+    },
+    {
+      "description": "Node.js ランタイム（Dockerfile・GitHub Actions 等）の更新を1つのPRにまとめる",
+      "matchDepNames": [
+        "node",
+        "actions/setup-node"
+      ],
+      "groupName": "node"
     },
     {
       "description": "Prisma CLI と Prisma Client のバージョンを常に揃えて更新する",
@@ -75,6 +83,13 @@
         "@tailwindcss/postcss"
       ],
       "groupName": "tailwindcss"
+    },
+    {
+      "description": "メジャーアップデート（破壊的変更の可能性あり）は自動PRを作成せず、Dependency Dashboard での手動承認制にする",
+      "matchUpdateTypes": [
+        "major"
+      ],
+      "dependencyDashboardApproval": true
     }
   ]
 }
