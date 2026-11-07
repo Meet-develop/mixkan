@@ -43,10 +43,9 @@
       "groupName": "github-actions"
     },
     {
-      "description": "Node.js ランタイム（Dockerfile・GitHub Actions 等）の更新を1つのPRにまとめる",
+      "description": "Node.js ランタイム（Dockerfile・GitHub Actions の node-version 等）の更新を1つのPRにまとめる",
       "matchDepNames": [
-        "node",
-        "actions/setup-node"
+        "node"
       ],
       "groupName": "node"
     },
