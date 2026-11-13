@@ -846,7 +846,9 @@ export default function EventDetailPage() {
       return;
     }
 
-    const requestMode = event.visibility === "private" && userId !== event.owner.userId;
+    const requestMode =
+      userId !== event.owner.userId &&
+      (event.visibility === "private" || event.status === "confirmed");
     const response = await fetch(`/api/events/${eventId}/invites`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -862,11 +864,23 @@ export default function EventDetailPage() {
       return;
     }
 
-    const data = (await response.json()) as { created: number; mode: "invite" | "request" };
+    const data = (await response.json()) as {
+      created: number;
+      mode: "invite" | "request";
+      skipped?: { alreadyParticipating: number; alreadyInvited: number };
+    };
+    const skippedNotes = [
+      data.skipped?.alreadyParticipating
+        ? `${data.skipped.alreadyParticipating} 名は参加済み・申請中`
+        : null,
+      data.skipped?.alreadyInvited ? `${data.skipped.alreadyInvited} 名は招待済み` : null,
+    ].filter(Boolean);
+    const skippedMessage =
+      skippedNotes.length > 0 ? `（${skippedNotes.join("、")}のため送信しませんでした）` : "";
     setInviteMessage(
       data.mode === "request"
-        ? `オーナーに ${data.created} 名分の招待申請を送信しました。`
-        : `${data.created} 名に招待を送信しました。`
+        ? `オーナーに ${data.created} 名分の招待申請を送信しました。${skippedMessage}`
+        : `${data.created} 名に招待を送信しました。${skippedMessage}`
     );
     setSelectedInviteeIds([]);
     setShowInviteOverlay(false);
