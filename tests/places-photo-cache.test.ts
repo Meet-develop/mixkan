@@ -4,6 +4,7 @@ import {
   FAILURE_CACHE_TTL_MS,
   MAX_ALLOWED_RETRIES,
   PlacesApiError,
+  isRetryablePlacesError,
   getPlacesPhotoTtlMs,
   getPlacesApiRetryConfig,
   isCacheExpired,
@@ -186,7 +187,41 @@ async function testFetchWithRetry() {
   assert.equal(callCount, 3, "初回 + リトライ2回で計3回呼ばれる");
   assert.deepEqual(retryAttempts, [1, 2]);
 
-  console.log("[PASS] fetchWithRetry handles success, retries, and max limits");
+  // shouldRetry: 恒久エラー (REQUEST_DENIED / HTTP 400 等) はリトライせず即座にスローする
+  assert.equal(isRetryablePlacesError(new PlacesApiError("503", { status: 503 })), true);
+  assert.equal(isRetryablePlacesError(new PlacesApiError("429", { status: 429 })), true);
+  assert.equal(isRetryablePlacesError(new PlacesApiError("OQL", { apiStatus: "OVER_QUERY_LIMIT" })), true);
+  assert.equal(isRetryablePlacesError(new PlacesApiError("UNK", { apiStatus: "UNKNOWN_ERROR" })), true);
+  assert.equal(isRetryablePlacesError(new PlacesApiError("400", { status: 400 })), false);
+  assert.equal(isRetryablePlacesError(new PlacesApiError("DENIED", { apiStatus: "REQUEST_DENIED" })), false);
+  assert.equal(isRetryablePlacesError(new PlacesApiError("INVALID", { apiStatus: "INVALID_REQUEST" })), false);
+
+  callCount = 0;
+  retryAttempts = [];
+  thrown = false;
+  try {
+    await fetchWithRetry(
+      async () => {
+        callCount++;
+        throw new PlacesApiError("Google Places Legacy API status: REQUEST_DENIED", {
+          apiStatus: "REQUEST_DENIED",
+        });
+      },
+      {
+        maxRetries: 3,
+        delayMs: 10,
+        shouldRetry: isRetryablePlacesError,
+        onRetry: (attempt) => retryAttempts.push(attempt),
+      }
+    );
+  } catch {
+    thrown = true;
+  }
+  assert.equal(thrown, true);
+  assert.equal(callCount, 1, "恒久エラーはリトライせず1回で終了する");
+  assert.deepEqual(retryAttempts, []);
+
+  console.log("[PASS] fetchWithRetry handles success, retries, shouldRetry, and max limits");
 }
 
 // --- 5. getPlacePhotoUrlByPlaceId with mock dbClient ---
@@ -343,7 +378,7 @@ async function testGetPlacePhotoUrlByPlaceId() {
     }
   });
 
-  // Case F: TTL切れでAPI呼び出しが失敗した場合 -> リトライ後、既存のキャッシュURLへフォールバック
+  // Case F: TTL切れでAPI呼び出しが失敗した場合 -> リトライ後、既存のキャッシュURLを保持したまま failed: true で記録し、FAILURE_CACHE_TTL_MS の間は再取得を抑制する
   await withEnv(
     {
       GOOGLE_PLACES_API_KEY: "test-api-key",
@@ -354,19 +389,28 @@ async function testGetPlacePhotoUrlByPlaceId() {
       const originalFetch = global.fetch;
 
       const cachedUrl = "https://example.com/existing-fallback.jpg";
+      const originalLastChangedAt = "2026-01-01T00:00:00.000Z";
       let fetchAttempts = 0;
-      let upsertCalled = false;
+      const state: { record: PlacePhotoCacheRecord } = {
+        record: {
+          query: cacheKey,
+          response: { photoUrl: cachedUrl, lastChangedAt: originalLastChangedAt },
+          updatedAt: new Date(Date.now() - DEFAULT_TTL_MS - 10000),
+          createdAt: new Date(Date.now() - DEFAULT_TTL_MS - 10000),
+        },
+      };
+
       const mockDb: PlacePhotoCacheDbClient = {
         placeCache: {
-          findUnique: async () => ({
-            query: cacheKey,
-            response: { photoUrl: cachedUrl },
-            updatedAt: new Date(Date.now() - 100000),
-            createdAt: new Date(Date.now() - 100000),
-          }),
+          findUnique: async () => state.record,
           update: async () => {},
-          upsert: async () => {
-            upsertCalled = true;
+          upsert: async (args) => {
+            state.record = {
+              query: args.where.query,
+              response: args.update.response,
+              updatedAt: new Date(),
+              createdAt: state.record.createdAt,
+            };
           },
         },
       };
@@ -377,10 +421,23 @@ async function testGetPlacePhotoUrlByPlaceId() {
       };
 
       try {
-        const url = await getPlacePhotoUrlByPlaceId(placeId, 60000, mockDb);
+        const url = await getPlacePhotoUrlByPlaceId(placeId, DEFAULT_TTL_MS, mockDb);
         assert.equal(url, cachedUrl, "API失敗時は既存のキャッシュURLへフォールバックする");
         assert.ok(fetchAttempts >= 2, "リトライが実行される");
-        assert.equal(upsertCalled, false, "既存キャッシュがある場合は失敗で上書きしない");
+        const savedResp = state.record.response as {
+          photoUrl: string | null;
+          lastChangedAt: string;
+          failed?: boolean;
+        };
+        assert.equal(savedResp.photoUrl, cachedUrl, "既存キャッシュURLを保持する");
+        assert.equal(savedResp.lastChangedAt, originalLastChangedAt, "lastChangedAtも保持する");
+        assert.equal(savedResp.failed, true, "failed: true が記録される");
+
+        // 直後の2回目アクセス: FAILURE_CACHE_TTL_MS 内なので外部APIを叩かず即座に既存URLを返す
+        const attemptsAfterFirst = fetchAttempts;
+        const secondUrl = await getPlacePhotoUrlByPlaceId(placeId, DEFAULT_TTL_MS, mockDb);
+        assert.equal(secondUrl, cachedUrl, "2回目も既存キャッシュURLが返る");
+        assert.equal(fetchAttempts, attemptsAfterFirst, "FAILURE_CACHE_TTL_MS 内は外部APIを再実行しない");
       } finally {
         global.fetch = originalFetch;
       }
@@ -441,10 +498,11 @@ async function testGetPlacePhotoUrlByPlaceId() {
     );
   }
 
-  // Case H (Review 2): 既存キャッシュがある状態で API が「写真なし (null)」を返した場合、nullで上書きせず既存キャッシュを保持する
+  // Case H (Review 2): 既存キャッシュがある状態で API が「写真なし (null)」を返した場合、nullで上書きせず既存キャッシュを保持し、updatedAt を更新して再取得を抑制する
   await withEnv({ GOOGLE_PLACES_API_KEY: "test-api-key" }, async () => {
     const originalFetch = global.fetch;
     const cachedUrl = "https://example.com/keep-this-photo.jpg";
+    let updateCalled = false;
     let upsertCalled = false;
 
     const mockDb: PlacePhotoCacheDbClient = {
@@ -455,7 +513,9 @@ async function testGetPlacePhotoUrlByPlaceId() {
           updatedAt: new Date(Date.now() - 100000),
           createdAt: new Date(Date.now() - 100000),
         }),
-        update: async () => {},
+        update: async () => {
+          updateCalled = true;
+        },
         upsert: async () => {
           upsertCalled = true;
         },
@@ -473,17 +533,18 @@ async function testGetPlacePhotoUrlByPlaceId() {
     try {
       const url = await getPlacePhotoUrlByPlaceId(placeId, 60000, mockDb);
       assert.equal(url, cachedUrl, "写真なし(null)が返っても既存のキャッシュURLが返る");
+      assert.equal(updateCalled, true, "updatedAtをtouchして次回以降の毎リクエスト再取得を防ぐ");
       assert.equal(upsertCalled, false, "既存の有効なキャッシュをnullでupsert上書きしない");
     } finally {
       global.fetch = originalFetch;
     }
   });
 
-  // Case I (Review 2 & 4): 旧 API が OVER_QUERY_LIMIT / REQUEST_DENIED を返した場合はエラー扱いとなりリトライ・フォールバックされる
+  // Case I (Review 2 & 4): 旧 API が OVER_QUERY_LIMIT を返した場合はリトライされ、REQUEST_DENIED 等の恒久エラーはリトライせず即座にフォールバックされる
   await withEnv(
     {
       GOOGLE_PLACES_API_KEY: "test-api-key",
-      PLACES_API_MAX_RETRIES: "1",
+      PLACES_API_MAX_RETRIES: "2",
       PLACES_API_RETRY_DELAY_MS: "5",
     },
     async () => {
@@ -524,7 +585,26 @@ async function testGetPlacePhotoUrlByPlaceId() {
       try {
         const url = await getPlacePhotoUrlByPlaceId(placeId, 60000, mockDb);
         assert.ok(url?.includes("recovered-after-oql"), "OVER_QUERY_LIMIT 後にリトライして回復する");
-        assert.equal(legacyCalls, 2, "旧APIがリトライされる");
+        assert.equal(legacyCalls, 2, "一時エラー(OVER_QUERY_LIMIT)は旧APIがリトライされる");
+      } finally {
+        global.fetch = originalFetch;
+      }
+
+      // 恒久エラー (REQUEST_DENIED) の場合はリトライせず1回で中断しフォールバック
+      legacyCalls = 0;
+      global.fetch = async (input) => {
+        const urlStr = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+        if (urlStr.includes("places.googleapis.com/v1/places")) {
+          return new Response(null, { status: 403 });
+        }
+        legacyCalls++;
+        return new Response(JSON.stringify({ status: "REQUEST_DENIED" }), { status: 200 });
+      };
+
+      try {
+        const url = await getPlacePhotoUrlByPlaceId(placeId, 60000, mockDb);
+        assert.equal(url, "https://example.com/cached-for-oql.jpg", "恒久エラー時は既存キャッシュへフォールバック");
+        assert.equal(legacyCalls, 1, "恒久エラー(REQUEST_DENIED)はリトライしない");
       } finally {
         global.fetch = originalFetch;
       }
