@@ -122,7 +122,12 @@ export async function GET(
     invitedBy: inviterByInviteeId.get(participant.userId) ?? null,
   }));
 
-  const participantUserIds = new Set(participants.map((participant) => participant.userId));
+  // 辞退・離脱・非承認の参加者は再招待されうるため、招待中一覧の除外対象にしない
+  const participantUserIds = new Set(
+    participants
+      .filter((participant) => participant.status !== "declined" && participant.status !== "cancelled")
+      .map((participant) => participant.userId)
+  );
 
   const pendingInviteeIds = new Set<string>();
   const invitedUsers = event.invites

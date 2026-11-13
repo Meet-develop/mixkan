@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { resolveInviteTargets } from "@/lib/invite-targets";
 import {
   buildInviteReceivedNotification,
   createAppNotification,
@@ -80,44 +81,25 @@ export async function POST(
     (friendId) => friendId !== event.ownerId
   );
 
-  // 辞退・離脱・非承認になった参加者は再招待できるようにする
-  const existingParticipantIds = new Set(
-    event.participants
-      .filter(
-        (participant: { status: string }) =>
-          participant.status !== "declined" && participant.status !== "cancelled"
-      )
-      .map((participant: { userId: string }) => participant.userId)
-  );
-  const existingInviteeIds = new Set(
+  // 辞退・離脱・非承認になった参加者、および回答済みの招待は再招待できるようにする
+  const { targetIds, skipped } = resolveInviteTargets(
+    friendIds,
+    event.participants,
     event.invites
-      .filter(
-        (invite: { status: string; inviteeId: string | null }) =>
-          invite.status === "pending" || invite.status === "accepted"
-      )
-      .map((invite: { inviteeId: string | null }) => invite.inviteeId)
-      .filter((value: string | null): value is string => Boolean(value))
   );
-
-  const targetIds = friendIds.filter(
-    (friendId) => !existingParticipantIds.has(friendId) && !existingInviteeIds.has(friendId)
-  );
-  const skipped = {
-    alreadyParticipating: friendIds.filter((friendId) => existingParticipantIds.has(friendId))
-      .length,
-    alreadyInvited: friendIds.filter(
-      (friendId) => !existingParticipantIds.has(friendId) && existingInviteeIds.has(friendId)
-    ).length,
-  };
-
-  if (targetIds.length === 0) {
-    return NextResponse.json({ created: 0, mode: body.mode ?? "invite", skipped });
-  }
 
   const requestMode =
     body.mode === "request" ||
     (event.visibility === "private" && body.actorId !== event.ownerId) ||
     (event.status === "confirmed" && body.actorId !== event.ownerId);
+
+  if (targetIds.length === 0) {
+    return NextResponse.json({
+      created: 0,
+      mode: requestMode ? "request" : "invite",
+      skipped,
+    });
+  }
 
   if (requestMode) {
     await Promise.all(

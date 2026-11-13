@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { resolveInviteTargets } from "@/lib/invite-targets";
 import {
   buildInviteReceivedNotification,
   createAppNotification,
@@ -75,24 +76,19 @@ export async function POST(
   });
 
   if (body.decision === "approve") {
-    const isParticipant = event.participants.some(
-      (participant: { userId: string; status: string }) =>
-        participant.userId === body.inviteeId &&
-        participant.status !== "declined" &&
-        participant.status !== "cancelled"
+    const { targetIds } = resolveInviteTargets(
+      [body.inviteeId],
+      event.participants,
+      event.invites
     );
-    const isAlreadyInvited = event.invites.some(
-      (invite: { inviteeId: string | null; status: string }) =>
-        invite.inviteeId === body.inviteeId &&
-        (invite.status === "pending" || invite.status === "accepted")
-    );
+    const shouldInvite = targetIds.length > 0;
 
     await prisma.eventInviteRequest.update({
       where: { id: requestRecord.id },
       data: { status: "accepted" },
     });
 
-    if (!isParticipant && !isAlreadyInvited) {
+    if (shouldInvite) {
       await prisma.eventInvite.create({
         data: {
           eventId: id,
