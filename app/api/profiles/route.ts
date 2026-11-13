@@ -30,16 +30,29 @@ export async function POST(request: Request) {
     );
   }
 
+  const now = new Date();
+  if (body.avatarIconUpdatedAt !== undefined) {
+    const parsedAvatarUpdatedAt = new Date(body.avatarIconUpdatedAt);
+    if (
+      typeof body.avatarIconUpdatedAt !== "string" ||
+      Number.isNaN(parsedAvatarUpdatedAt.getTime()) ||
+      parsedAvatarUpdatedAt.getTime() > now.getTime()
+    ) {
+      return NextResponse.json(
+        { message: "avatarIconUpdatedAt must be a valid past or present date" },
+        { status: 400 }
+      );
+    }
+  }
+
   const existingProfile = await prisma.profile.findUnique({
     where: { userId: body.userId },
-    select: { userId: true },
+    select: { userId: true, avatarIcon: true },
   });
 
-  const avatarIconUpdatedAt = body.avatarIconUpdatedAt
-    ? new Date(body.avatarIconUpdatedAt)
-    : body.avatarIcon
-    ? new Date()
-    : undefined;
+  const isAvatarChanged =
+    Boolean(body.avatarIcon) && body.avatarIcon !== existingProfile?.avatarIcon;
+  const avatarIconUpdatedAt = isAvatarChanged ? now : undefined;
 
   const profile = await prisma.profile.upsert({
     where: { userId: body.userId },

@@ -128,8 +128,14 @@ NEXT_PUBLIC_LINE_BOT_PROMPT="aggressive"
 # Supabase DB を使う場合のみ有効化
 DATABASE_URL="postgresql://postgres:<YOUR_SUPABASE_DB_PASSWORD>@db.<YOUR_PROJECT_REF>.supabase.co:5432/postgres?sslmode=require&pgbouncer=true"
 
-# LINE 通知を使う場合のみ設定
+# LINE 通知・プロフィール画像自動更新を使う場合のみ設定
 # LINE_MESSAGING_CHANNEL_ACCESS_TOKEN="<YOUR_LINE_CHANNEL_ACCESS_TOKEN>"
+# LINE アバターキャッシュ・リトライ設定（任意 / 未設定時は既定値を使用）
+# LINE_AVATAR_TTL_MS="604800000"         # キャッシュ有効期間（ミリ秒、既定: 7日）
+# LINE_AVATAR_TTL_SECONDS="604800"       # キャッシュ有効期間（秒、LINE_AVATAR_TTL_MS 優先）
+# LINE_API_MAX_RETRIES="2"               # LINE API 5xx エラー時の最大リトライ回数（既定: 2）
+# LINE_API_RETRY_DELAY_MS="500"          # リトライ間隔の基準ミリ秒（既定: 500）
+# LINE_API_TIMEOUT_MS="3000"             # LINE API タイムアウト（ミリ秒、既定: 3000）
 ```
 
 ### 3. Authentication 設定

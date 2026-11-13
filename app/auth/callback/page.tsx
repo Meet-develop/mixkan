@@ -274,6 +274,7 @@ export default function AuthCallbackPage() {
             ? lineDefaults.displayName
             : profile.displayName;
 
+        const adoptedLineAvatar = !profile.avatarIcon && Boolean(lineDefaults.avatarIcon);
         const resolvedAvatarIcon = profile.avatarIcon ?? lineDefaults.avatarIcon;
 
         await fetch("/api/profiles", {
@@ -283,7 +284,7 @@ export default function AuthCallbackPage() {
             userId: session.user.id,
             displayName: resolvedDisplayName,
             avatarIcon: resolvedAvatarIcon,
-            avatarIconUpdatedAt: resolvedAvatarIcon ? new Date().toISOString() : undefined,
+            avatarIconUpdatedAt: adoptedLineAvatar ? new Date().toISOString() : undefined,
             birthDate: profile.birthDate ?? lineDefaults.birthDate,
             lineUserId: profile.lineUserId ?? lineUserId,
           }),
