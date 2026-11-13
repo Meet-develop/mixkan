@@ -44,7 +44,7 @@ export async function GET(request: Request) {
 
   const normalizedEventArea = normalizeArea(eventArea);
   const sortedFriends = friends
-    .map((friend: any) => {
+    .map((friend) => {
       const area = friend.friend.favoriteAreas[0] ?? null;
       const isFavorite = favoriteUserIds.has(friend.friend.userId);
 
@@ -56,7 +56,7 @@ export async function GET(request: Request) {
         isFavorite,
       };
     })
-    .sort((a: any, b: any) => {
+    .sort((a, b) => {
       const sameAreaA =
         normalizedEventArea.length > 0 && normalizeArea(a.area) === normalizedEventArea;
       const sameAreaB =

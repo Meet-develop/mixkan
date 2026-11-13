@@ -26,6 +26,12 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY="<YOUR_SUPABASE_ANON_KEY>"
 GOOGLE_PLACES_API_KEY="<YOUR_GOOGLE_PLACES_API_KEY>"
 APP_ORIGIN="http://localhost:3000"
 
+# Google Places 写真キャッシュ・リトライ設定（任意・デフォルト値あり）
+# PLACES_PHOTO_TTL_MS="86400000"
+# PLACES_PHOTO_TTL_SECONDS="86400"
+# PLACES_API_MAX_RETRIES="1"
+# PLACES_API_RETRY_DELAY_MS="300"
+
 # LINEログイン用
 # Supabase標準LINE Provider: line
 # Custom OIDC Provider: custom:<provider-id>
@@ -117,6 +123,12 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY="<YOUR_SUPABASE_ANON_KEY>"
 GOOGLE_PLACES_API_KEY="<YOUR_GOOGLE_PLACES_API_KEY>"
 APP_ORIGIN="http://localhost:3000"
 
+# Google Places 写真キャッシュ・リトライ設定（任意・デフォルト値あり）
+# PLACES_PHOTO_TTL_MS="86400000"
+# PLACES_PHOTO_TTL_SECONDS="86400"
+# PLACES_API_MAX_RETRIES="1"
+# PLACES_API_RETRY_DELAY_MS="300"
+
 # LINEログイン用
 # Supabase標準LINE Provider: line
 # Custom OIDC Provider: custom:<provider-id>
@@ -185,6 +197,14 @@ docker compose exec app npm run db:seed:nonlocal
 ### 5. RLS 設定（profiles）
 
 Supabase SQL Editor で [supabase/profiles_rls.sql](supabase/profiles_rls.sql) を実行してください。
+
+その他の `public` テーブルは Prisma migration（`prisma/migrations/*_enable_rls`）で RLS が有効化されます（`npm run db:migrate`）。
+ポリシーは付けていないため、Supabase の REST/GraphQL API（anon / authenticated）からは読み書きできません。
+アプリ本体は `BYPASSRLS` を持つ `postgres` ロール経由の Prisma で接続するため影響を受けません。
+
+- 新しいテーブルを追加する migration では、必ず `ENABLE ROW LEVEL SECURITY` も含めてください。
+- `FORCE ROW LEVEL SECURITY` は付けないでください（`BYPASSRLS` を持たないオーナーロールで接続すると、ポリシーなしで全拒否になるため。現行の `postgres` は影響しませんが、ロール変更時のリスクを避けます）。
+- 緊急時のロールバック: `ALTER TABLE public.<table> DISABLE ROW LEVEL SECURITY;`（`profiles` は own-row ポリシーで保護されているため対象外。DISABLE すると anon から読み書きできてしまいます）
 
 ### 6. Storage 設定（ユーザーアイコン）
 

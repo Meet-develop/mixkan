@@ -137,7 +137,7 @@ export default function EventHistoryPage() {
             読み込み中...
           </div>
         ) : sortedHistory.length === 0 ? (
-          <div className="rounded-3xl border border-dashed border-orange-200 bg-white/80 p-8 text-center text-sm text-[var(--muted)]">
+          <div className="rounded-2xl border border-dashed border-[var(--muted)]/40 bg-white/80 p-8 text-center text-sm text-[var(--muted)]">
             参加履歴はまだありません。
           </div>
         ) : (
@@ -162,7 +162,7 @@ function HistoryEventListItem({ event }: { event: EventSummary }) {
   return (
     <Link
       href={`/events/${event.id}`}
-      className="flex items-center gap-3 rounded-2xl border border-orange-100 bg-white p-4 shadow-sm"
+      className="flex items-center gap-3 rounded-2xl bg-white p-4 shadow-card"
     >
       <div className="grid h-11 w-11 place-items-center rounded-2xl bg-orange-100 text-[var(--accent)]">
         <span className="material-symbols-rounded">event</span>

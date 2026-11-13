@@ -4,6 +4,10 @@ import { getPlacesForQuery } from "@/lib/places";
 import { parseIsoDateTimeWithTimeZone } from "@/lib/datetime";
 import { hasAnyWeekdayAvailability } from "@/lib/availability";
 import {
+  buildInviteReceivedNotification,
+  createAppNotifications,
+} from "@/lib/notification-delivery";
+import {
   buildDayPriorityByWeekday,
   buildDefaultTimeCandidates,
   type AvailabilityInput,
@@ -162,29 +166,29 @@ export async function GET(request: Request) {
       where: { userId: viewerId },
       select: { favoriteUserId: true },
     });
-    favoriteOwnerIds = new Set(favorites.map((favorite: any) => favorite.favoriteUserId));
+    favoriteOwnerIds = new Set(favorites.map((favorite) => favorite.favoriteUserId));
   }
 
   const formatted = events
-    .filter((event: any) => {
+    .filter((event) => {
       if (!viewerId) {
         return event.visibility === "public";
       }
 
       const isOwner = event.ownerId === viewerId;
-      const isParticipant = event.participants.some((participant: any) => participant.userId === viewerId);
-      const isInvited = event.invites.some((invite: any) => invite.inviteeId === viewerId);
+      const isParticipant = event.participants.some((participant) => participant.userId === viewerId);
+      const isInvited = event.invites.some((invite) => invite.inviteeId === viewerId);
       return event.visibility === "public" || isOwner || isParticipant || isInvited;
     })
-    .map((event: any) => {
+    .map((event) => {
       const eventArea = (event as { area?: string | null }).area ?? null;
       const approvedCount = event.participants.filter(
-        (participant: any) => participant.status === "approved"
+        (participant) => participant.status === "approved"
       ).length;
       const isOwner = viewerId ? event.ownerId === viewerId : false;
       const isJoinedParticipant = viewerId
         ? event.participants.some(
-            (participant: any) =>
+            (participant) =>
               participant.userId === viewerId &&
               participant.status !== "declined" &&
               participant.status !== "cancelled"
@@ -192,19 +196,19 @@ export async function GET(request: Request) {
         : false;
       const pendingInvite = viewerId
         ? event.invites.find(
-            (invite: any) =>
+            (invite) =>
               invite.inviteeId === viewerId &&
               (invite.status === "pending" || invite.status === "accepted")
           )
         : undefined;
       const timeCandidates = [...event.timeCandidates]
-        .sort((a: any, b: any) => {
+        .sort((a, b) => {
           const ta = new Date(a.startTime).getTime();
           const tb = new Date(b.startTime).getTime();
           return ta - tb;
         })
         .slice(0, 3)
-        .map((candidate: any) => ({
+        .map((candidate) => ({
           id: candidate.id,
           startTime: candidate.startTime,
           endTime: candidate.endTime,
@@ -212,7 +216,7 @@ export async function GET(request: Request) {
         }));
       const placeCandidates = [...event.placeCandidates]
         .slice(0, 3)
-        .map((candidate: any) => ({
+        .map((candidate) => ({
           id: candidate.id,
           name: candidate.name,
           address: candidate.address,
@@ -241,8 +245,8 @@ export async function GET(request: Request) {
         },
         approvedCount,
         participantUserIds: event.participants
-          .filter((participant: any) => participant.status === "approved")
-          .map((participant: any) => participant.userId),
+          .filter((participant) => participant.status === "approved")
+          .map((participant) => participant.userId),
         timeCandidates,
         placeCandidates,
         isFavoriteOwner: viewerId ? favoriteOwnerIds.has(event.ownerId) : false,
@@ -254,7 +258,7 @@ export async function GET(request: Request) {
         createdAt: event.createdAt,
       };
     })
-    .sort((a: any, b: any) => {
+    .sort((a, b) => {
       if (a.isFavoriteOwner && !b.isFavoriteOwner) return -1;
       if (!a.isFavoriteOwner && b.isFavoriteOwner) return 1;
       return 0;
@@ -265,7 +269,7 @@ export async function GET(request: Request) {
   if (includePast) {
     const history = formatted
       .filter(
-        (event: any) =>
+        (event) =>
           event.viewerRelation === "participating" &&
           event.status !== "cancelled" &&
           event.startTime != null &&
@@ -273,7 +277,7 @@ export async function GET(request: Request) {
           (!periodStart || new Date(event.startTime).getTime() >= periodStart.getTime())
       )
       .sort(
-        (a: any, b: any) =>
+        (a, b) =>
           new Date(b.startTime as Date).getTime() -
           new Date(a.startTime as Date).getTime()
       );
@@ -291,13 +295,13 @@ export async function GET(request: Request) {
   }
 
   const upcoming = formatted.filter(
-    (event: any) =>
+    (event) =>
       event.startTime == null || new Date(event.startTime).getTime() > now
   );
 
-  const participating = upcoming.filter((event: any) => event.viewerRelation === "participating");
-  const invited = upcoming.filter((event: any) => event.viewerRelation === "invited");
-  const publicEvents = upcoming.filter((event: any) => event.viewerRelation === "public");
+  const participating = upcoming.filter((event) => event.viewerRelation === "participating");
+  const invited = upcoming.filter((event) => event.viewerRelation === "invited");
+  const publicEvents = upcoming.filter((event) => event.viewerRelation === "public");
 
   return NextResponse.json(
     {
@@ -530,7 +534,7 @@ export async function POST(request: Request) {
         dayPriorityByWeekday
       );
       await prisma.eventTimeCandidate.createMany({
-        data: timeCandidates.map((candidate: any) => ({
+        data: timeCandidates.map((candidate) => ({
           eventId: event.id,
           ...candidate,
         })),
@@ -540,7 +544,7 @@ export async function POST(request: Request) {
     if (!isPlaceManual) {
       if (body.candidatePlaces && body.candidatePlaces.length > 0) {
         await prisma.eventPlaceCandidate.createMany({
-          data: body.candidatePlaces.slice(0, 5).map((candidate: any) => ({
+          data: body.candidatePlaces.slice(0, 5).map((candidate) => ({
             eventId: event.id,
             placeId: candidate.placeId,
             name: candidate.name,
@@ -586,7 +590,7 @@ export async function POST(request: Request) {
 
         if (placeCandidates.length > 0) {
           await prisma.eventPlaceCandidate.createMany({
-            data: placeCandidates.map((candidate: any) => ({
+            data: placeCandidates.map((candidate) => ({
               eventId: event.id,
               ...candidate,
             })),
@@ -606,6 +610,23 @@ export async function POST(request: Request) {
         status: "pending" as const,
       })),
     });
+
+    const inviterName = ownerProfile.displayName;
+    try {
+      await createAppNotifications(
+        inviteeIds.map((inviteeId) =>
+          buildInviteReceivedNotification({
+            userId: inviteeId,
+            inviterName,
+            eventPurpose: event.purpose,
+            eventId: event.id,
+          })
+        )
+      );
+    } catch (error) {
+      // 通知の作成に失敗してもイベント作成自体は成功として扱う
+      console.error("Failed to create invite notifications on event creation", error);
+    }
   }
 
   return NextResponse.json({ id: event.id });

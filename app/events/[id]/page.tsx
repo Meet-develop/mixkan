@@ -90,7 +90,7 @@ type PlaceResult = {
 };
 
 const plusButtonClass =
-  "grid h-7 w-7 place-items-center rounded-full border border-dashed border-gray-400 bg-gray-50 text-gray-500";
+  "grid h-7 w-7 place-items-center rounded-full bg-gray-50 text-gray-500 shadow-card";
 
 const PLACE_CATEGORIES = ["居酒屋", "カフェ", "レストラン", "バー", "焼肉"];
 
@@ -349,7 +349,7 @@ export default function EventDetailPage() {
     event && userId ? `calendar-registration:${event.id}:${userId}` : null;
 
   useEffect(() => {
-    if (!calendarRegistrationStorageKey || !event) {
+    if (!calendarRegistrationStorageKey) {
       setCalendarRegistrationVersion(null);
       return;
     }
@@ -579,6 +579,8 @@ export default function EventDetailPage() {
         // ignore
       }
     }
+    // handleJoin は毎レンダー再生成されるため依存に含めない（保留中の参加処理を一度だけ実行する）
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, eventId, event, participantStatus]);
 
   const handleLeave = async () => {
@@ -844,7 +846,9 @@ export default function EventDetailPage() {
       return;
     }
 
-    const requestMode = event.visibility === "private" && userId !== event.owner.userId;
+    const requestMode =
+      userId !== event.owner.userId &&
+      (event.visibility === "private" || event.status === "confirmed");
     const response = await fetch(`/api/events/${eventId}/invites`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -860,11 +864,23 @@ export default function EventDetailPage() {
       return;
     }
 
-    const data = (await response.json()) as { created: number; mode: "invite" | "request" };
+    const data = (await response.json()) as {
+      created: number;
+      mode: "invite" | "request";
+      skipped?: { alreadyParticipating: number; alreadyInvited: number };
+    };
+    const skippedNotes = [
+      data.skipped?.alreadyParticipating
+        ? `${data.skipped.alreadyParticipating} 名は参加済み・申請中`
+        : null,
+      data.skipped?.alreadyInvited ? `${data.skipped.alreadyInvited} 名は招待済み` : null,
+    ].filter(Boolean);
+    const skippedMessage =
+      skippedNotes.length > 0 ? `（${skippedNotes.join("、")}のため送信しませんでした）` : "";
     setInviteMessage(
       data.mode === "request"
-        ? `オーナーに ${data.created} 名分の招待申請を送信しました。`
-        : `${data.created} 名に招待を送信しました。`
+        ? `オーナーに ${data.created} 名分の招待申請を送信しました。${skippedMessage}`
+        : `${data.created} 名に招待を送信しました。${skippedMessage}`
     );
     setSelectedInviteeIds([]);
     setShowInviteOverlay(false);
@@ -925,11 +941,11 @@ export default function EventDetailPage() {
       `${window.location.origin}/events/${eventId}${userId ? `?ref=${encodeURIComponent(userId)}` : ""}`;
     const text = "このイベントに一緒に参加しませんか？";
 
-    if ((navigator as any).share) {
+    if (navigator.share) {
       try {
-        await (navigator as any).share({ title: event.purpose, text, url: urlToShare });
+        await navigator.share({ title: event.purpose, text, url: urlToShare });
       } catch (error) {
-        const err = error as any;
+        const err = error as { message?: string; name?: string } | null;
         const errMsg = err?.message || "";
         const errName = err?.name || "";
         const errStr = String(error);
@@ -965,7 +981,7 @@ export default function EventDetailPage() {
             : "イベントのリンクをコピーしました。"
         );
       }
-    } catch (error) {
+    } catch {
       if (!quiet) setInviteMessage("コピーに失敗しました。リンクを長押しして共有してください。");
     }
   };
@@ -1215,7 +1231,7 @@ export default function EventDetailPage() {
                     type="button"
                     onClick={handleCalendarDownload}
                     disabled={hasRegisteredCalendar || isCalendarDownloading}
-                    className="flex w-full items-center justify-center gap-2 rounded-full border-2 border-orange-500 bg-white px-4 py-2 text-xs font-semibold text-orange-500 transition-colors hover:bg-orange-50 disabled:cursor-not-allowed disabled:border-gray-300 disabled:bg-gray-100 disabled:text-gray-500 disabled:shadow-none disabled:hover:bg-gray-100"
+                    className="flex w-full items-center justify-center gap-2 rounded-full bg-white px-4 py-2 text-xs font-semibold text-orange-500 shadow-card transition-colors hover:bg-orange-50 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500 disabled:shadow-none disabled:hover:bg-gray-100"
                   >
                     <span className="material-symbols-rounded">calendar_add_on</span>
                     {isCalendarDownloading ? "登録中..." : "カレンダーに登録"}
@@ -1236,7 +1252,7 @@ export default function EventDetailPage() {
                     type="button"
                     onClick={handleCalendarDownload}
                     disabled={hasRegisteredCalendar || isCalendarDownloading}
-                    className="flex w-full items-center justify-center gap-2 rounded-full border-2 border-orange-500 bg-white px-4 py-2 text-xs font-semibold text-orange-500 transition-colors hover:bg-orange-50 disabled:cursor-not-allowed disabled:border-gray-300 disabled:bg-gray-100 disabled:text-gray-500 disabled:shadow-none disabled:hover:bg-gray-100"
+                    className="flex w-full items-center justify-center gap-2 rounded-full bg-white px-4 py-2 text-xs font-semibold text-orange-500 shadow-card transition-colors hover:bg-orange-50 disabled:cursor-not-allowed disabled:bg-gray-100 disabled:text-gray-500 disabled:shadow-none disabled:hover:bg-gray-100"
                   >
                     <span className="material-symbols-rounded">calendar_add_on</span>
                     {isCalendarDownloading ? "登録中..." : "カレンダーに登録"}
@@ -1868,7 +1884,7 @@ export default function EventDetailPage() {
               <button
                 onClick={() => handleShare()}
                 disabled={!canAccessParticipantActions}
-                className="flex w-full items-center justify-center gap-2 rounded-full bg-white border-2 border-gray-200 hover:bg-gray-50 px-4 py-2 text-sm font-semibold text-[var(--foreground)] disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
+                className="flex w-full items-center justify-center gap-2 rounded-full bg-white shadow-card hover:bg-gray-50 px-4 py-2 text-sm font-semibold text-[var(--foreground)] disabled:cursor-not-allowed disabled:opacity-50 transition-colors"
               >
                 <span className="material-symbols-rounded">share</span>
                 外部アプリで招待する

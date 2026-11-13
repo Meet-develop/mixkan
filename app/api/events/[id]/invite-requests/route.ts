@@ -1,6 +1,10 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { createAppNotification } from "@/lib/notification-delivery";
+import { resolveInviteTargets } from "@/lib/invite-targets";
+import {
+  buildInviteReceivedNotification,
+  createAppNotification,
+} from "@/lib/notification-delivery";
 
 type InviteRequestDecisionBody = {
   ownerId?: string;
@@ -52,7 +56,7 @@ export async function POST(
     return NextResponse.json({ message: "Forbidden" }, { status: 403 });
   }
 
-  const requestRecord = await (prisma as any).eventInviteRequest.findUnique({
+  const requestRecord = await prisma.eventInviteRequest.findUnique({
     where: {
       eventId_requesterId_inviteeId: {
         eventId: id,
@@ -72,24 +76,19 @@ export async function POST(
   });
 
   if (body.decision === "approve") {
-    const isParticipant = event.participants.some(
-      (participant: { userId: string; status: string }) =>
-        participant.userId === body.inviteeId &&
-        participant.status !== "declined" &&
-        participant.status !== "cancelled"
+    const { targetIds } = resolveInviteTargets(
+      [body.inviteeId],
+      event.participants,
+      event.invites
     );
-    const isAlreadyInvited = event.invites.some(
-      (invite: { inviteeId: string | null; status: string }) =>
-        invite.inviteeId === body.inviteeId &&
-        (invite.status === "pending" || invite.status === "accepted")
-    );
+    const shouldInvite = targetIds.length > 0;
 
-    await (prisma as any).eventInviteRequest.update({
+    await prisma.eventInviteRequest.update({
       where: { id: requestRecord.id },
       data: { status: "accepted" },
     });
 
-    if (!isParticipant && !isAlreadyInvited) {
+    if (shouldInvite) {
       await prisma.eventInvite.create({
         data: {
           eventId: id,
@@ -100,14 +99,14 @@ export async function POST(
         },
       });
 
-      await createAppNotification({
-        userId: body.inviteeId,
-        type: "invite_received",
-        title: "イベント招待",
-        body: `${requester?.displayName ?? "参加者"}さんから「${event.purpose}」の招待が届きました。`,
-        message: `${requester?.displayName ?? "参加者"}さんから「${event.purpose}」の招待が届きました。`,
-        eventId: id,
-      });
+      await createAppNotification(
+        buildInviteReceivedNotification({
+          userId: body.inviteeId,
+          inviterName: requester?.displayName ?? "参加者",
+          eventPurpose: event.purpose,
+          eventId: id,
+        })
+      );
     }
 
     await createAppNotification({
@@ -122,7 +121,7 @@ export async function POST(
     return NextResponse.json({ success: true, status: "accepted" });
   }
 
-  await (prisma as any).eventInviteRequest.update({
+  await prisma.eventInviteRequest.update({
     where: { id: requestRecord.id },
     data: { status: "declined" },
   });

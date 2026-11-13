@@ -25,7 +25,6 @@ const periodOptions = [
 ] as const;
 
 export default function NotificationsPage() {
-  const [userId, setUserId] = useState<string | null>(null);
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [period, setPeriod] = useState<(typeof periodOptions)[number]["value"]>("30d");
 
@@ -42,8 +41,6 @@ export default function NotificationsPage() {
     const loadUser = async () => {
       const { data } = await supabase.auth.getSession();
       const currentUserId = data.session?.user?.id ?? null;
-      setUserId(currentUserId);
-
       if (currentUserId) {
         loadNotifications(currentUserId, period);
       }
@@ -86,7 +83,7 @@ export default function NotificationsPage() {
           </div>
 
           {notifications.length === 0 ? (
-            <div className="rounded-3xl border border-dashed border-orange-200 bg-white/80 p-8 text-center text-sm text-[var(--muted)]">
+            <div className="rounded-2xl border border-dashed border-[var(--muted)]/40 bg-white/80 p-8 text-center text-sm text-[var(--muted)]">
               <div className="mx-auto mb-3 grid h-12 w-12 place-items-center rounded-2xl bg-orange-100 text-[var(--accent)]">
                 <span className="material-symbols-rounded">notifications</span>
               </div>
@@ -99,7 +96,7 @@ export default function NotificationsPage() {
                 <li key={notification.id}>
                   <Link
                     href={`/notifications/${notification.id}`}
-                    className="flex items-start gap-3 rounded-2xl border border-orange-100 bg-white p-4 shadow-sm transition hover:border-orange-200"
+                    className="flex items-start gap-3 rounded-2xl bg-white p-4 shadow-card"
                   >
                     <div className="grid h-11 w-11 place-items-center rounded-2xl bg-orange-100 text-[var(--accent)]">
                       <span className="material-symbols-rounded">
