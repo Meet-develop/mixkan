@@ -32,14 +32,19 @@ export async function POST(request: Request) {
 
   const existingProfile = await prisma.profile.findUnique({
     where: { userId: body.userId },
-    select: { userId: true },
+    select: { userId: true, avatarIcon: true },
   });
+
+  const isAvatarChanged =
+    Boolean(body.avatarIcon) && body.avatarIcon !== existingProfile?.avatarIcon;
+  const avatarIconUpdatedAt = isAvatarChanged ? new Date() : undefined;
 
   const profile = await prisma.profile.upsert({
     where: { userId: body.userId },
     update: {
       displayName: body.displayName,
       avatarIcon: body.avatarIcon,
+      avatarIconUpdatedAt,
       gender: body.gender,
       birthDate: body.birthDate ? new Date(body.birthDate) : undefined,
       playFrequency: body.playFrequency,
@@ -56,6 +61,7 @@ export async function POST(request: Request) {
       userId: body.userId,
       displayName: body.displayName,
       avatarIcon: body.avatarIcon,
+      avatarIconUpdatedAt,
       gender: body.gender ?? "unspecified",
       birthDate: body.birthDate ? new Date(body.birthDate) : undefined,
       playFrequency: body.playFrequency,

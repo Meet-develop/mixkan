@@ -1,8 +1,19 @@
-import { NextResponse } from "next/server";
+import { after, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { hasAnyWeekdayAvailability } from "@/lib/availability";
+import { refreshLineAvatarIfExpired } from "@/lib/line-avatar";
 
 const PROFILE_CACHE_CONTROL = "no-store, max-age=0";
+
+const scheduleBackgroundRefresh = (task: () => Promise<unknown>) => {
+  try {
+    after(async () => {
+      await task();
+    });
+  } catch {
+    void task();
+  }
+};
 
 const calcProfileCompletion = (profile: {
   displayName: string;
@@ -70,22 +81,42 @@ export async function GET(
     return NextResponse.json({ message: "Not found" }, { status: 404 });
   }
 
-  const [hostedCount, participatingCount, friendships] = await Promise.all([
-    prisma.event.count({ where: { ownerId: id } }),
-    prisma.eventParticipant.count({
-      where: {
-        userId: id,
-        status: { notIn: ["declined", "cancelled"] },
-      },
-    }),
-    prisma.friendship.findMany({
-      where: {
-        status: "accepted",
-        OR: [{ userId: id }, { friendId: id }],
-      },
-      select: { userId: true, friendId: true },
-    }),
-  ]);
+  // 他人のプロフィール閲覧時はレスポンスをブロックせず後続処理で更新し、
+  // 本人のプロフィール取得時は統計クエリと並列に更新する
+  const avatarRefreshPromise =
+    viewerId === id
+      ? refreshLineAvatarIfExpired(profile)
+      : (() => {
+          scheduleBackgroundRefresh(() => refreshLineAvatarIfExpired(profile));
+          return Promise.resolve({
+            avatarIcon: profile.avatarIcon ?? null,
+            updated: false,
+          });
+        })();
+
+  const [{ avatarIcon: latestAvatarIcon }, hostedCount, participatingCount, friendships] =
+    await Promise.all([
+      avatarRefreshPromise,
+      prisma.event.count({ where: { ownerId: id } }),
+      prisma.eventParticipant.count({
+        where: {
+          userId: id,
+          status: { notIn: ["declined", "cancelled"] },
+        },
+      }),
+      prisma.friendship.findMany({
+        where: {
+          status: "accepted",
+          OR: [{ userId: id }, { friendId: id }],
+        },
+        select: { userId: true, friendId: true },
+      }),
+    ]);
+
+  const activeProfile = {
+    ...profile,
+    avatarIcon: latestAvatarIcon,
+  };
 
   const friendCount = new Set(
     friendships.map((friendship: { userId: string; friendId: string }) =>
@@ -94,7 +125,7 @@ export async function GET(
   ).size;
 
   // LINEのユーザーIDは本人以外に返さない
-  const { lineUserId, ...publicProfile } = profile;
+  const { lineUserId, ...publicProfile } = activeProfile;
 
   return NextResponse.json({
     ...publicProfile,
@@ -103,7 +134,7 @@ export async function GET(
       hostedCount,
       participatingCount,
       friendCount,
-      completionRate: calcProfileCompletion(profile),
+      completionRate: calcProfileCompletion(activeProfile),
     },
   }, {
     headers: {
