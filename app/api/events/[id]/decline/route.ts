@@ -59,7 +59,7 @@ export async function POST(
 
   await createAppNotification({
     userId: body.userId,
-    type: "join_approved",
+    type: "join_declined",
     title: "参加申請は非承認となりました",
     body: `${ownerName}さんが「${event.purpose}」への参加申請を見送りました。`,
     message: `${ownerName}さんが「${event.purpose}」への参加申請を見送りました。`,

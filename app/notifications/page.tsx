@@ -60,7 +60,14 @@ export default function NotificationsPage() {
           >
             <span className="material-symbols-rounded">chevron_left</span>
           </Link>
-          <h1 className="text-lg font-semibold">通知</h1>
+          <h1 className="flex-1 text-lg font-semibold">通知</h1>
+          <Link
+            href="/notifications/settings"
+            aria-label="通知設定"
+            className="grid h-9 w-9 place-items-center rounded-full bg-white text-[var(--foreground)] shadow-sm"
+          >
+            <span className="material-symbols-rounded">settings</span>
+          </Link>
         </div>
       </header>
 
