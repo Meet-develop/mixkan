@@ -52,29 +52,55 @@ type GooglePlaceNewDetailsResponse = {
 };
 
 export const DEFAULT_TTL_MS = 1000 * 60 * 60 * 24;
+export const FAILURE_CACHE_TTL_MS = 1000 * 60 * 5;
+export const DEFAULT_FETCH_TIMEOUT_MS = 3000;
+export const MAX_ALLOWED_RETRIES = 5;
+
+export class PlacesApiError extends Error {
+  readonly status?: number;
+  readonly apiStatus?: string;
+
+  constructor(message: string, options?: { status?: number; apiStatus?: string }) {
+    super(message);
+    this.name = "PlacesApiError";
+    this.status = options?.status;
+    this.apiStatus = options?.apiStatus;
+  }
+}
+
+const parsePositiveIntEnv = (value: string | undefined): number | null => {
+  if (!value || value.trim() === "") return null;
+  const num = Number(value);
+  if (!Number.isInteger(num) || num <= 0) return null;
+  return num;
+};
+
+const parseNonNegativeIntEnv = (value: string | undefined): number | null => {
+  if (!value || value.trim() === "") return null;
+  const num = Number(value);
+  if (!Number.isInteger(num) || num < 0) return null;
+  return num;
+};
 
 export const getPlacesPhotoTtlMs = (): number => {
-  const envMs = process.env.PLACES_PHOTO_TTL_MS;
-  if (envMs) {
-    const parsed = parseInt(envMs, 10);
-    if (!Number.isNaN(parsed) && parsed > 0) return parsed;
-  }
-  const envSec = process.env.PLACES_PHOTO_TTL_SECONDS;
-  if (envSec) {
-    const parsed = parseInt(envSec, 10);
-    if (!Number.isNaN(parsed) && parsed > 0) return parsed * 1000;
-  }
+  const parsedMs = parsePositiveIntEnv(process.env.PLACES_PHOTO_TTL_MS);
+  if (parsedMs !== null) return parsedMs;
+
+  const parsedSec = parsePositiveIntEnv(process.env.PLACES_PHOTO_TTL_SECONDS);
+  if (parsedSec !== null) return parsedSec * 1000;
+
   return DEFAULT_TTL_MS;
 };
 
 export const getPlacesApiRetryConfig = () => {
-  const retriesEnv = process.env.PLACES_API_MAX_RETRIES;
-  const delayEnv = process.env.PLACES_API_RETRY_DELAY_MS;
-  const maxRetries = retriesEnv ? parseInt(retriesEnv, 10) : 2;
-  const retryDelayMs = delayEnv ? parseInt(delayEnv, 10) : 500;
+  const parsedRetries = parseNonNegativeIntEnv(process.env.PLACES_API_MAX_RETRIES);
+  const parsedDelay = parseNonNegativeIntEnv(process.env.PLACES_API_RETRY_DELAY_MS);
+  const maxRetries =
+    parsedRetries === null ? 1 : Math.min(parsedRetries, MAX_ALLOWED_RETRIES);
+  const retryDelayMs = parsedDelay === null ? 300 : parsedDelay;
   return {
-    maxRetries: Number.isNaN(maxRetries) || maxRetries < 0 ? 2 : maxRetries,
-    retryDelayMs: Number.isNaN(retryDelayMs) || retryDelayMs < 0 ? 500 : retryDelayMs,
+    maxRetries,
+    retryDelayMs,
   };
 };
 
@@ -87,6 +113,7 @@ export async function fetchWithRetry<T>(
   options: {
     maxRetries: number;
     delayMs: number;
+    jitter?: boolean;
     onRetry?: (attempt: number, error: unknown) => void;
   }
 ): Promise<T> {
@@ -102,7 +129,11 @@ export async function fetchWithRetry<T>(
       if (options.onRetry) {
         options.onRetry(attempt, error);
       }
-      await new Promise((resolve) => setTimeout(resolve, options.delayMs * attempt));
+      const baseWait = options.delayMs * attempt;
+      const waitMs = options.jitter
+        ? Math.floor(baseWait * (0.75 + Math.random() * 0.5))
+        : baseWait;
+      await new Promise((resolve) => setTimeout(resolve, waitMs));
     }
   }
 }
@@ -341,59 +372,104 @@ export async function getPlacesForQuery(
   return places;
 }
 
-async function fetchPhotoUrlFromGooglePlaces(
+async function fetchPhotoFromNewApi(
   placeId: string,
   apiKey: string
 ): Promise<string | null> {
-  try {
-    const newDetailResponse = await fetch(
-      `https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}`,
-      {
-        headers: {
-          "X-Goog-Api-Key": apiKey,
-          "X-Goog-FieldMask": NEW_API_DETAIL_FIELD_MASK,
-        },
-      }
-    );
+  const newDetailResponse = await fetch(
+    `https://places.googleapis.com/v1/places/${encodeURIComponent(placeId)}`,
+    {
+      headers: {
+        "X-Goog-Api-Key": apiKey,
+        "X-Goog-FieldMask": NEW_API_DETAIL_FIELD_MASK,
+      },
+      signal: AbortSignal.timeout(DEFAULT_FETCH_TIMEOUT_MS),
+    }
+  );
 
-    if (newDetailResponse.ok) {
-      const payload = (await newDetailResponse.json()) as GooglePlaceNewDetailsResponse;
-      const photoName = payload.photos?.[0]?.name;
-      if (photoName) {
-        return toPlacesNewPhotoUrl(photoName, apiKey);
-      }
-    } else if (newDetailResponse.status >= 500 || newDetailResponse.status === 429) {
-      throw new Error(`Google Places New API HTTP ${newDetailResponse.status}`);
-    }
-  } catch (error) {
-    if (error instanceof Error && (error.message.includes("HTTP 5") || error.message.includes("HTTP 429"))) {
-      throw error;
-    }
+  if (newDetailResponse.ok) {
+    const payload = (await newDetailResponse.json()) as GooglePlaceNewDetailsResponse;
+    const photoName = payload.photos?.[0]?.name;
+    return photoName ? toPlacesNewPhotoUrl(photoName, apiKey) : null;
   }
 
+  throw new PlacesApiError(
+    `Google Places New API HTTP ${newDetailResponse.status}`,
+    { status: newDetailResponse.status }
+  );
+}
+
+async function fetchPhotoFromLegacyApi(
+  placeId: string,
+  apiKey: string
+): Promise<string | null> {
   const detailsUrl = new URL("https://maps.googleapis.com/maps/api/place/details/json");
   detailsUrl.searchParams.set("place_id", placeId);
   detailsUrl.searchParams.set("fields", "photo");
   detailsUrl.searchParams.set("key", apiKey);
 
-  const legacyDetailResponse = await fetch(detailsUrl.toString());
-  if (legacyDetailResponse.ok) {
-    const legacyPayload = (await legacyDetailResponse.json()) as {
-      result?: { photos?: Array<{ photo_reference?: string }> };
-      status?: string;
-    };
-    if (legacyPayload.status === "OVER_QUERY_LIMIT") {
-      throw new Error("Google Places Legacy API: OVER_QUERY_LIMIT");
-    }
-    const photoRef = legacyPayload.result?.photos?.[0]?.photo_reference;
-    if (photoRef) {
-      return `https://maps.googleapis.com/maps/api/place/photo?maxwidth=320&photo_reference=${encodeURIComponent(photoRef)}&key=${apiKey}`;
-    }
-  } else if (legacyDetailResponse.status >= 500 || legacyDetailResponse.status === 429) {
-    throw new Error(`Google Places Legacy API HTTP ${legacyDetailResponse.status}`);
+  const legacyDetailResponse = await fetch(detailsUrl.toString(), {
+    signal: AbortSignal.timeout(DEFAULT_FETCH_TIMEOUT_MS),
+  });
+
+  if (!legacyDetailResponse.ok) {
+    throw new PlacesApiError(
+      `Google Places Legacy API HTTP ${legacyDetailResponse.status}`,
+      { status: legacyDetailResponse.status }
+    );
+  }
+
+  const legacyPayload = (await legacyDetailResponse.json()) as {
+    result?: { photos?: Array<{ photo_reference?: string }> };
+    status?: string;
+  };
+
+  if (legacyPayload.status && legacyPayload.status !== "OK" && legacyPayload.status !== "ZERO_RESULTS") {
+    throw new PlacesApiError(
+      `Google Places Legacy API status: ${legacyPayload.status}`,
+      { apiStatus: legacyPayload.status }
+    );
+  }
+
+  const photoRef = legacyPayload.result?.photos?.[0]?.photo_reference;
+  if (photoRef) {
+    return `https://maps.googleapis.com/maps/api/place/photo?maxwidth=320&photo_reference=${encodeURIComponent(photoRef)}&key=${apiKey}`;
   }
 
   return null;
+}
+
+async function fetchPhotoUrlFromGooglePlaces(
+  placeId: string,
+  apiKey: string,
+  retryOptions: { maxRetries: number; retryDelayMs: number }
+): Promise<string | null> {
+  try {
+    const newApiPhotoUrl = await fetchPhotoFromNewApi(placeId, apiKey);
+    if (newApiPhotoUrl) {
+      return newApiPhotoUrl;
+    }
+  } catch (error) {
+    console.warn(
+      `[PlacesCache] New API failed for placeId: ${placeId}, falling back to Legacy API. Reason:`,
+      error instanceof Error ? error.message : error
+    );
+  }
+
+  return fetchWithRetry(
+    async () => fetchPhotoFromLegacyApi(placeId, apiKey),
+    {
+      maxRetries: retryOptions.maxRetries,
+      delayMs: retryOptions.retryDelayMs,
+      jitter: true,
+      onRetry: (attempt, error) => {
+        console.warn(
+          `[PlacesCache] Legacy API retry ${attempt}/${retryOptions.maxRetries} for placeId: ${placeId}. Reason:`,
+          error instanceof Error ? error.message : error
+        );
+      },
+    }
+  );
 }
 
 export type PlacePhotoCacheRecord = {
@@ -403,20 +479,20 @@ export type PlacePhotoCacheRecord = {
   createdAt: Date;
 };
 
+export type PlacePhotoCacheResponseData = {
+  photoUrl: string | null;
+  lastChangedAt: string;
+  failed?: boolean;
+};
+
 export type PlacePhotoCacheUpsertArgs = {
   where: { query: string };
   create: {
     query: string;
-    response: {
-      photoUrl: string | null;
-      fetchedAt: string;
-    };
+    response: PlacePhotoCacheResponseData;
   };
   update: {
-    response: {
-      photoUrl: string | null;
-      fetchedAt: string;
-    };
+    response: PlacePhotoCacheResponseData;
   };
 };
 
@@ -428,6 +504,18 @@ export type PlacePhotoCacheDbClient = {
   };
 };
 
+const parseCachedPhotoResponse = (
+  raw: unknown
+): { photoUrl: string | null; failed: boolean } => {
+  if (!raw || typeof raw !== "object") {
+    return { photoUrl: null, failed: false };
+  }
+  const record = raw as Record<string, unknown>;
+  const photoUrl = typeof record.photoUrl === "string" ? record.photoUrl : null;
+  const failed = record.failed === true;
+  return { photoUrl, failed };
+};
+
 export async function getPlacePhotoUrlByPlaceId(
   placeId: string,
   ttlMs?: number,
@@ -436,12 +524,7 @@ export async function getPlacePhotoUrlByPlaceId(
   const effectiveTtlMs = ttlMs ?? getPlacesPhotoTtlMs();
   const cacheKey = `photo:${placeId}`;
 
-  let cached: {
-    query: string;
-    response: unknown;
-    updatedAt: Date;
-    createdAt: Date;
-  } | null = null;
+  let cached: PlacePhotoCacheRecord | null = null;
 
   try {
     cached = await dbClient.placeCache.findUnique({ where: { query: cacheKey } });
@@ -451,9 +534,10 @@ export async function getPlacePhotoUrlByPlaceId(
 
   let existingPhotoUrl: string | null = null;
   if (cached) {
-    const data = cached.response as { photoUrl?: string | null };
-    existingPhotoUrl = data?.photoUrl ?? null;
-    if (!isCacheExpired(cached.updatedAt, effectiveTtlMs)) {
+    const parsed = parseCachedPhotoResponse(cached.response);
+    existingPhotoUrl = parsed.photoUrl;
+    const cacheTtlMs = parsed.failed ? Math.min(effectiveTtlMs, FAILURE_CACHE_TTL_MS) : effectiveTtlMs;
+    if (!isCacheExpired(cached.updatedAt, cacheTtlMs)) {
       return existingPhotoUrl;
     }
   }
@@ -467,69 +551,76 @@ export async function getPlacePhotoUrlByPlaceId(
     return null;
   }
 
-  const { maxRetries, retryDelayMs } = getPlacesApiRetryConfig();
+  const retryOptions = getPlacesApiRetryConfig();
   let newPhotoUrl: string | null = null;
 
   try {
-    newPhotoUrl = await fetchWithRetry(
-      async () => fetchPhotoUrlFromGooglePlaces(placeId, apiKey),
-      {
-        maxRetries,
-        delayMs: retryDelayMs,
-        onRetry: (attempt, error) => {
-          console.warn(
-            `[PlacesCache] Retry ${attempt}/${maxRetries} for placeId: ${placeId}. Reason:`,
-            error instanceof Error ? error.message : error
-          );
-        },
-      }
-    );
+    newPhotoUrl = await fetchPhotoUrlFromGooglePlaces(placeId, apiKey, retryOptions);
   } catch (error) {
     console.error(
-      `[PlacesCache] Failed to fetch photo for placeId: ${placeId} after ${maxRetries} retries.`,
-      error instanceof Error ? error.message : error
+      `[PlacesCache] Failed to fetch photo for placeId: ${placeId} after ${retryOptions.maxRetries} retries.`,
+      error instanceof PlacesApiError || error instanceof Error ? error.message : error
     );
     if (existingPhotoUrl !== null) {
       console.warn(`[PlacesCache] Falling back to existing cached photo URL for placeId: ${placeId}`);
       return existingPhotoUrl;
     }
+    try {
+      const nowIso = new Date().toISOString();
+      const failureResponse: PlacePhotoCacheResponseData = {
+        photoUrl: null,
+        lastChangedAt: nowIso,
+        failed: true,
+      };
+      await dbClient.placeCache.upsert({
+        where: { query: cacheKey },
+        create: { query: cacheKey, response: failureResponse },
+        update: { response: failureResponse },
+      });
+    } catch (dbError) {
+      console.error(`[PlacesCache] Failed to cache failure state for placeId: ${placeId}`, dbError);
+    }
     return null;
   }
 
+  if (newPhotoUrl === null && existingPhotoUrl !== null) {
+    console.warn(`[PlacesCache] No photo returned. Keeping cached URL for ${placeId}`);
+    return existingPhotoUrl;
+  }
+
   try {
+    const now = new Date();
     // 画像URLに変更がない場合、不要な更新を避けてupdatedAtのみ更新
     if (existingPhotoUrl && existingPhotoUrl === newPhotoUrl) {
       console.info(`[PlacesCache] Photo URL unchanged for placeId: ${placeId}. Touching updatedAt.`);
       await dbClient.placeCache.update({
         where: { query: cacheKey },
-        data: { updatedAt: new Date() },
+        data: { updatedAt: now },
       });
       return newPhotoUrl;
     }
 
-    // 最新の画像URLを取得した場合、保存済みのURLと取得日時を更新
+    // 最新の画像URLを取得した場合、保存済みのURLと変更日時を更新
     console.info(`[PlacesCache] Photo URL updated for placeId: ${placeId}`);
+    const responsePayload: PlacePhotoCacheResponseData = {
+      photoUrl: newPhotoUrl,
+      lastChangedAt: now.toISOString(),
+    };
     await dbClient.placeCache.upsert({
       where: { query: cacheKey },
       create: {
         query: cacheKey,
-        response: {
-          photoUrl: newPhotoUrl,
-          fetchedAt: new Date().toISOString(),
-        },
+        response: responsePayload,
       },
       update: {
-        response: {
-          photoUrl: newPhotoUrl,
-          fetchedAt: new Date().toISOString(),
-        },
+        response: responsePayload,
       },
     });
   } catch (dbError) {
     console.error(`[PlacesCache] Failed to save photoUrl to cache for placeId: ${placeId}`, dbError);
   }
 
-  return newPhotoUrl ?? existingPhotoUrl;
+  return newPhotoUrl;
 }
 
 export async function getAreaCandidatesForQuery(
