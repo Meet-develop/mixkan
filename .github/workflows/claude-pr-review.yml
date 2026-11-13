@@ -10,7 +10,11 @@ jobs:
   review:
     runs-on: ubuntu-latest
     if: |
-      github.event_name == 'pull_request' ||
+      (github.event_name == 'pull_request' &&
+       github.actor != 'renovate[bot]' &&
+       github.event.pull_request.user.login != 'renovate[bot]' &&
+       github.actor != 'dependabot[bot]' &&
+       github.event.pull_request.user.login != 'dependabot[bot]') ||
       (github.event_name == 'issue_comment' &&
        github.event.issue.pull_request != null &&
        contains(github.event.comment.body, '@claude'))
