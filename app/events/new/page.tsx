@@ -39,7 +39,8 @@ type EventEditResponse = {
   purpose: string;
   comment?: string | null;
   area?: string | null;
-  visibility: "public" | "limited" | "private";
+  visibility: "public" | "limited" | "private" | "community";
+  communityId?: string | null;
   capacity: number;
   fixedStartTime?: string | null;
   fixedPlaceId?: string | null;
@@ -55,7 +56,7 @@ type EventUpdateComparable = {
   purpose: string;
   comment: string;
   eventArea: string;
-  visibility: "public" | "limited" | "private";
+  visibility: "public" | "limited" | "private" | "community";
   capacity: number;
   timeSetting: "auto" | "manual";
   placeSetting: "auto" | "manual";
@@ -70,13 +71,14 @@ type EventUpdateComparable = {
 type Step = 1 | 2 | 3 | 4 | 5 | 6;
 
 const visibilityOptions: Array<{
-  value: "public" | "limited" | "private";
+  value: "public" | "limited" | "private" | "community";
   label: string;
   icon: string;
 }> = [
   { value: "public", label: "公開イベント", icon: "public" },
   { value: "limited", label: "限定公開", icon: "group" },
   { value: "private", label: "プライベート", icon: "lock" },
+  { value: "community", label: "コミュニティ", icon: "diversity_3" },
 ];
 
 const purposeElementOptions = [
@@ -197,7 +199,11 @@ function EventCreatePageContent() {
 
   const [eventTitleInput, setEventTitleInput] = useState("");
   const [isTitleCustomized, setIsTitleCustomized] = useState(false);
-  const [visibility, setVisibility] = useState<"public" | "limited" | "private">("public");
+  const [visibility, setVisibility] = useState<"public" | "limited" | "private" | "community">("public");
+  const [userCommunities, setUserCommunities] = useState<Array<{ id: string; name: string; isMember?: boolean }>>([]);
+  const [selectedCommunityId, setSelectedCommunityId] = useState<string>("");
+  const [newCommunityName, setNewCommunityName] = useState<string>("");
+  const [communityCreateMode, setCommunityCreateMode] = useState<boolean>(false);
   const [capacity, setCapacity] = useState(6);
   const [selectedInvites, setSelectedInvites] = useState<string[]>([]);
   const [friends, setFriends] = useState<Friend[]>([]);
@@ -265,6 +271,24 @@ function EventCreatePageContent() {
       } else {
         setProfileCompletionRate(0);
       }
+
+      try {
+        const commResponse = await fetch(`/api/communities?userId=${encodeURIComponent(currentUserId)}`, {
+          cache: "no-store",
+        });
+        if (commResponse.ok) {
+          const commList = await commResponse.json();
+          setUserCommunities(commList);
+          if (commList.length > 0) {
+            const myComm = commList.find(
+              (c: { id: string; isMember?: boolean }) => c.isMember
+            );
+            setSelectedCommunityId(myComm ? myComm.id : commList[0].id);
+          }
+        }
+      } catch {
+        // コミュニティ一覧取得失敗は無視
+      }
     };
 
     load();
@@ -313,6 +337,9 @@ function EventCreatePageContent() {
       setEventTitleInput(event.purpose);
       setIsTitleCustomized(true);
       setVisibility(event.visibility);
+      if (event.communityId) {
+        setSelectedCommunityId(event.communityId);
+      }
       setVisibilityTouched(true);
       setCapacity(normalizeCapacity(event.capacity));
       setCapacityTouched(true);
@@ -535,7 +562,9 @@ function EventCreatePageContent() {
     handlePurposeToggle(next);
   };
 
-  const handleSelectVisibility = (value: "public" | "limited" | "private") => {
+  const handleSelectVisibility = (
+    value: "public" | "limited" | "private" | "community"
+  ) => {
     setVisibility(value);
     setVisibilityTouched(true);
   };
@@ -675,11 +704,30 @@ function EventCreatePageContent() {
         return;
       }
 
+      if (visibility === "community") {
+        if (communityCreateMode && !newCommunityName.trim()) {
+          setSubmitMessage("新規コミュニティ名を入力してください。");
+          return;
+        }
+        if (!communityCreateMode && !selectedCommunityId) {
+          setSubmitMessage("対象のコミュニティを選択するか、新規作成してください。");
+          return;
+        }
+      }
+
       const requestBody = {
         ownerId: userId,
         purpose: resolvedTitle,
         comment: eventComment,
         visibility,
+        communityId:
+          visibility === "community" && !communityCreateMode
+            ? selectedCommunityId
+            : undefined,
+        newCommunityName:
+          visibility === "community" && communityCreateMode
+            ? newCommunityName.trim()
+            : undefined,
         capacity,
         scheduleMode: derivedScheduleMode,
         timeSetting,
@@ -906,6 +954,55 @@ function EventCreatePageContent() {
                     </button>
                   ))}
                 </div>
+
+                {visibility === "community" && (
+                  <div className="mt-3 rounded-2xl border border-orange-100 bg-white/90 p-4 shadow-sm space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-[var(--foreground)]">対象コミュニティ</span>
+                      <button
+                        type="button"
+                        onClick={() => setCommunityCreateMode(!communityCreateMode)}
+                        className="text-xs text-[var(--accent)] underline font-medium cursor-pointer"
+                      >
+                        {communityCreateMode ? "既存コミュニティから選ぶ" : "+ 新規コミュニティを作成"}
+                      </button>
+                    </div>
+
+                    {communityCreateMode ? (
+                      <div>
+                        <label className="block text-[11px] text-[var(--muted)] mb-1">新規コミュニティ名</label>
+                        <input
+                          type="text"
+                          value={newCommunityName}
+                          onChange={(e) => setNewCommunityName(e.target.value)}
+                          placeholder="例: ボドゲ部、写真サークル"
+                          className="w-full rounded-xl border border-orange-200 bg-white px-3 py-2 text-xs"
+                        />
+                      </div>
+                    ) : (
+                      <div>
+                        {userCommunities.length === 0 ? (
+                          <div className="text-xs text-[var(--muted)]">
+                            コミュニティが見つかりません。「新規コミュニティを作成」から作成してください。
+                          </div>
+                        ) : (
+                          <select
+                            value={selectedCommunityId}
+                            onChange={(e) => setSelectedCommunityId(e.target.value)}
+                            className="w-full rounded-xl border border-orange-200 bg-white px-3 py-2 text-xs text-[var(--foreground)]"
+                          >
+                            <option value="">コミュニティを選択してください</option>
+                            {userCommunities.map((c) => (
+                              <option key={c.id} value={c.id}>
+                                {c.name} {c.isMember ? "(所属中)" : ""}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
 
                 {isFocusMode && (
                   <button

@@ -64,6 +64,13 @@ export async function GET(
 
   const profile = await prisma.profile.findUnique({
     where: { userId: id },
+    include: {
+      communities: {
+        include: {
+          community: true,
+        },
+      },
+    },
   });
 
   if (!profile) {
@@ -95,6 +102,13 @@ export async function GET(
 
   return NextResponse.json({
     ...profile,
+    communities: profile.communities.map((c) => ({
+      id: c.community.id,
+      name: c.community.name,
+      description: c.community.description,
+      role: c.role,
+      joinedAt: c.joinedAt,
+    })),
     stats: {
       hostedCount,
       participatingCount,
