@@ -1,8 +1,12 @@
 import { prisma } from "@/lib/prisma";
 
 export const DEFAULT_LINE_AVATAR_TTL_MS = 1000 * 60 * 60 * 24 * 7; // 7 days
+export const DEFAULT_LINE_API_MAX_RETRIES = 1;
+export const MAX_ALLOWED_LINE_API_RETRIES = 3;
+export const DEFAULT_LINE_API_RETRY_DELAY_MS = 500;
 export const DEFAULT_LINE_API_TIMEOUT_MS = 3000; // 3 seconds
 export const DEFAULT_LINE_AVATAR_FAILURE_COOLDOWN_MS = 1000 * 60 * 15; // 15 minutes
+export const MAX_FAILED_ATTEMPT_ENTRIES = 1000;
 
 const parsePositiveInt = (raw?: string): number | null => {
   if (!raw || !raw.trim()) return null;
@@ -29,8 +33,14 @@ export const getLineAvatarTtlMs = (): number => {
 };
 
 export const getLineApiRetryConfig = () => {
-  const maxRetries = parseNonNegativeInt(process.env.LINE_API_MAX_RETRIES) ?? 2;
-  const retryDelayMs = parseNonNegativeInt(process.env.LINE_API_RETRY_DELAY_MS) ?? 500;
+  const parsedRetries = parseNonNegativeInt(process.env.LINE_API_MAX_RETRIES);
+  const maxRetries =
+    parsedRetries === null
+      ? DEFAULT_LINE_API_MAX_RETRIES
+      : Math.min(parsedRetries, MAX_ALLOWED_LINE_API_RETRIES);
+  const retryDelayMs =
+    parseNonNegativeInt(process.env.LINE_API_RETRY_DELAY_MS) ??
+    DEFAULT_LINE_API_RETRY_DELAY_MS;
   return {
     maxRetries,
     retryDelayMs,
@@ -87,17 +97,29 @@ export class LineApiError extends Error {
   }
 }
 
+export const isRetryableLineError = (error: unknown): boolean => {
+  if (error instanceof LineApiError) {
+    return error.retryable;
+  }
+  if (
+    error instanceof Error &&
+    (error.name === "TimeoutError" || error.name === "AbortError")
+  ) {
+    return false;
+  }
+  return true;
+};
+
 export async function fetchWithRetry<T>(
   fn: (attempt: number) => Promise<T>,
   options: {
     maxRetries: number;
     retryDelayMs?: number;
-    delayMs?: number;
     shouldRetry?: (error: unknown) => boolean;
     onRetry?: (attempt: number, error: unknown) => void;
   }
 ): Promise<T> {
-  const delayMs = options.retryDelayMs ?? options.delayMs ?? 500;
+  const retryDelayMs = options.retryDelayMs ?? DEFAULT_LINE_API_RETRY_DELAY_MS;
   let attempt = 0;
   while (true) {
     try {
@@ -105,7 +127,7 @@ export async function fetchWithRetry<T>(
     } catch (error) {
       const canRetry =
         attempt < options.maxRetries &&
-        !(error instanceof LineApiError && !error.retryable) &&
+        isRetryableLineError(error) &&
         (options.shouldRetry ? options.shouldRetry(error) : true);
 
       if (!canRetry) {
@@ -115,7 +137,7 @@ export async function fetchWithRetry<T>(
       if (options.onRetry) {
         options.onRetry(attempt, error);
       }
-      await new Promise((resolve) => setTimeout(resolve, delayMs * attempt));
+      await new Promise((resolve) => setTimeout(resolve, retryDelayMs * attempt));
     }
   }
 }
@@ -131,15 +153,28 @@ export async function fetchLineProfilePicture(
   }
 
   const timeoutMs = getLineApiTimeoutMs();
-  const response = await fetch(
-    `https://api.line.me/v2/bot/profile/${encodeURIComponent(lineUserId)}`,
-    {
-      headers: {
-        Authorization: `Bearer ${token}`,
-      },
-      signal: AbortSignal.timeout(timeoutMs),
+  let response: Response;
+  try {
+    response = await fetch(
+      `https://api.line.me/v2/bot/profile/${encodeURIComponent(lineUserId)}`,
+      {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+        signal: AbortSignal.timeout(timeoutMs),
+      }
+    );
+  } catch (error) {
+    if (
+      error instanceof Error &&
+      (error.name === "TimeoutError" || error.name === "AbortError")
+    ) {
+      throw new LineApiError(`LINE API request timed out after ${timeoutMs}ms`, {
+        retryable: false,
+      });
     }
-  );
+    throw error;
+  }
 
   if (response.ok) {
     const data = (await response.json()) as { pictureUrl?: string };
@@ -147,15 +182,13 @@ export async function fetchLineProfilePicture(
   }
 
   if (response.status === 404) {
-    console.info(
-      `[LineAvatar] LINE profile not found (404) for lineUserId: ${lineUserId}`
-    );
+    console.info("[LineAvatar] LINE profile not found (404)");
     return null;
   }
 
   if (response.status === 401 || response.status === 403) {
     console.error(
-      `[LineAvatar] LINE API authentication/authorization error (HTTP ${response.status}) for lineUserId: ${lineUserId}. Check channel access token.`
+      `[LineAvatar] LINE API authentication/authorization error (HTTP ${response.status}). Check channel access token.`
     );
     throw new LineApiError(`LINE API HTTP ${response.status}`, {
       status: response.status,
@@ -164,9 +197,7 @@ export async function fetchLineProfilePicture(
   }
 
   if (response.status === 429) {
-    console.warn(
-      `[LineAvatar] LINE API rate limited (HTTP 429) for lineUserId: ${lineUserId}`
-    );
+    console.warn("[LineAvatar] LINE API rate limited (HTTP 429)");
     throw new LineApiError("LINE API HTTP 429", {
       status: 429,
       retryable: false,
@@ -180,9 +211,7 @@ export async function fetchLineProfilePicture(
     });
   }
 
-  console.error(
-    `[LineAvatar] LINE API client error (HTTP ${response.status}) for lineUserId: ${lineUserId}`
-  );
+  console.error(`[LineAvatar] LINE API client error (HTTP ${response.status})`);
   throw new LineApiError(`LINE API HTTP ${response.status}`, {
     status: response.status,
     retryable: false,
@@ -214,6 +243,50 @@ const inFlightRefreshes = new Map<
 >();
 const failedAttemptAtByUser = new Map<string, number>();
 let hasWarnedMissingToken = false;
+
+const isInFailureCooldown = (
+  userId: string,
+  nowMs: number,
+  cooldownMs: number
+): boolean => {
+  const lastFailedAt = failedAttemptAtByUser.get(userId);
+  if (lastFailedAt === undefined) {
+    return false;
+  }
+  if (nowMs - lastFailedAt >= cooldownMs) {
+    failedAttemptAtByUser.delete(userId);
+    return false;
+  }
+  return true;
+};
+
+const recordFailedAttempt = (
+  userId: string,
+  nowMs: number,
+  cooldownMs: number
+): void => {
+  if (cooldownMs <= 0) {
+    failedAttemptAtByUser.delete(userId);
+    return;
+  }
+  if (
+    !failedAttemptAtByUser.has(userId) &&
+    failedAttemptAtByUser.size >= MAX_FAILED_ATTEMPT_ENTRIES
+  ) {
+    for (const [key, failedAt] of failedAttemptAtByUser) {
+      if (nowMs - failedAt >= cooldownMs) {
+        failedAttemptAtByUser.delete(key);
+      }
+    }
+    if (failedAttemptAtByUser.size >= MAX_FAILED_ATTEMPT_ENTRIES) {
+      const oldestKey = failedAttemptAtByUser.keys().next().value;
+      if (oldestKey !== undefined) {
+        failedAttemptAtByUser.delete(oldestKey);
+      }
+    }
+  }
+  failedAttemptAtByUser.set(userId, nowMs);
+};
 
 export const resetLineAvatarRefreshState = (): void => {
   inFlightRefreshes.clear();
@@ -252,8 +325,7 @@ export async function refreshLineAvatarIfExpired(
 
   // 直近の取得失敗からクールダウン期間内の場合は再試行を抑制
   const cooldownMs = options?.failureCooldownMs ?? getLineAvatarFailureCooldownMs();
-  const lastFailedAt = failedAttemptAtByUser.get(profile.userId);
-  if (lastFailedAt !== undefined && nowMs - lastFailedAt < cooldownMs) {
+  if (isInFailureCooldown(profile.userId, nowMs, cooldownMs)) {
     return { avatarIcon: profile.avatarIcon ?? null, updated: false };
   }
 
@@ -292,7 +364,7 @@ export async function refreshLineAvatarIfExpired(
           onRetry: (attempt, error) => {
             retryCount = attempt;
             console.warn(
-              `[LineAvatar] Retry ${attempt}/${maxRetries} for lineUserId: ${profile.lineUserId}. Reason:`,
+              `[LineAvatar] Retry ${attempt}/${maxRetries} for userId: ${profile.userId}. Reason:`,
               error instanceof Error ? error.message : error
             );
           },
@@ -300,14 +372,36 @@ export async function refreshLineAvatarIfExpired(
       );
       failedAttemptAtByUser.delete(profile.userId);
     } catch (error) {
-      failedAttemptAtByUser.set(profile.userId, options?.now ?? Date.now());
+      const failureNowMs = options?.now ?? Date.now();
+      recordFailedAttempt(profile.userId, failureNowMs, cooldownMs);
+
       const retryNote =
         retryCount > 0 ? `after ${retryCount} retries` : "without retry";
       console.error(
         `[LineAvatar] Failed to refresh avatar for userId: ${profile.userId} (${retryNote}).`,
         error instanceof Error ? error.message : error
       );
-      // API失敗時は既存の画像URLをフォールバックとして維持し、更新日時は進めない
+
+      // サーバーレス環境等でインスタンスをまたいで連続再試行されるのを防ぐため、
+      // avatarIconUpdatedAt を「now - ttl + cooldown」に設定してクールダウン期間だけ期限切れ判定を抑制する
+      if (cooldownMs > 0) {
+        const effectiveCooldownMs = Math.min(cooldownMs, effectiveTtlMs);
+        const backoffUpdatedAt = new Date(
+          failureNowMs - effectiveTtlMs + effectiveCooldownMs
+        );
+        try {
+          await db.profile.update({
+            where: { userId: profile.userId },
+            data: { avatarIconUpdatedAt: backoffUpdatedAt },
+          });
+        } catch (dbError) {
+          console.error(
+            `[LineAvatar] Failed to record failure cooldown in database for userId: ${profile.userId}`,
+            dbError
+          );
+        }
+      }
+
       if (profile.avatarIcon) {
         console.warn(
           `[LineAvatar] Falling back to existing avatar URL for userId: ${profile.userId}`
@@ -317,14 +411,14 @@ export async function refreshLineAvatarIfExpired(
     }
 
     const existingIcon = profile.avatarIcon ?? null;
-    const now = new Date(options?.now ?? Date.now());
+    const completedNow = new Date(options?.now ?? Date.now());
 
     try {
       // LINE側で写真が取得できなかった場合（未設定や404など）で、既存画像がある場合は既存画像を保護
       if (latestPictureUrl === null && existingIcon !== null) {
         await db.profile.update({
           where: { userId: profile.userId },
-          data: { avatarIconUpdatedAt: now },
+          data: { avatarIconUpdatedAt: completedNow },
         });
         return { avatarIcon: existingIcon, updated: false };
       }
@@ -336,7 +430,7 @@ export async function refreshLineAvatarIfExpired(
         );
         await db.profile.update({
           where: { userId: profile.userId },
-          data: { avatarIconUpdatedAt: now },
+          data: { avatarIconUpdatedAt: completedNow },
         });
         return { avatarIcon: existingIcon, updated: false };
       }
@@ -347,7 +441,7 @@ export async function refreshLineAvatarIfExpired(
         where: { userId: profile.userId },
         data: {
           avatarIcon: latestPictureUrl,
-          avatarIconUpdatedAt: now,
+          avatarIconUpdatedAt: completedNow,
         },
       });
 

@@ -233,19 +233,31 @@ export default function AuthCallbackPage() {
           }
         })();
 
-        await fetch("/api/profiles", {
+        const createResponse = await fetch("/api/profiles", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             userId: session.user.id,
             displayName: fallbackDisplayName,
             avatarIcon: lineDefaults.avatarIcon,
-            avatarIconUpdatedAt: lineDefaults.avatarIcon ? new Date().toISOString() : undefined,
             birthDate: lineDefaults.birthDate,
             lineUserId,
             inviteToken: pendingInviteToken ?? undefined,
           }),
         });
+        if (!createResponse.ok) {
+          // 招待トークンを保持したまま中断し、再ログイン時に再試行できるようにする
+          console.error("Failed to create profile on auth callback", createResponse.status);
+          if (active) {
+            router.replace(
+              buildLoginUrlWithError(
+                "プロフィールの作成に失敗しました。時間をおいて再度お試しください。",
+                returnTo
+              )
+            );
+          }
+          return;
+        }
 
         const refetchedProfile = await fetch(
           `/api/profiles/${session.user.id}?viewerId=${encodeURIComponent(session.user.id)}`,
@@ -274,21 +286,20 @@ export default function AuthCallbackPage() {
             ? lineDefaults.displayName
             : profile.displayName;
 
-        const adoptedLineAvatar = !profile.avatarIcon && Boolean(lineDefaults.avatarIcon);
-        const resolvedAvatarIcon = profile.avatarIcon ?? lineDefaults.avatarIcon;
-
-        await fetch("/api/profiles", {
+        const patchResponse = await fetch("/api/profiles", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             userId: session.user.id,
             displayName: resolvedDisplayName,
-            avatarIcon: resolvedAvatarIcon,
-            avatarIconUpdatedAt: adoptedLineAvatar ? new Date().toISOString() : undefined,
+            avatarIcon: profile.avatarIcon ?? lineDefaults.avatarIcon,
             birthDate: profile.birthDate ?? lineDefaults.birthDate,
             lineUserId: profile.lineUserId ?? lineUserId,
           }),
         });
+        if (!patchResponse.ok) {
+          console.error("Failed to update profile with LINE info", patchResponse.status);
+        }
       }
 
       const redirectPath = eventReturnTo ?? "/profile/setup";

@@ -1,11 +1,14 @@
 import assert from "node:assert/strict";
 import {
   DEFAULT_LINE_AVATAR_TTL_MS,
+  DEFAULT_LINE_API_MAX_RETRIES,
+  MAX_ALLOWED_LINE_API_RETRIES,
   LineApiError,
   getLineAvatarTtlMs,
   getLineApiRetryConfig,
   isLineHostedAvatar,
   isLineAvatarExpired,
+  isRetryableLineError,
   fetchWithRetry,
   refreshLineAvatarIfExpired,
   resetLineAvatarRefreshState,
@@ -57,19 +60,31 @@ import { POST as upsertProfile } from "../app/api/profiles/route";
     delete process.env.LINE_API_MAX_RETRIES;
     delete process.env.LINE_API_RETRY_DELAY_MS;
     const defConfig = getLineApiRetryConfig();
-    assert.equal(defConfig.maxRetries, 2, "デフォルトリトライ回数は2回");
+    assert.equal(defConfig.maxRetries, DEFAULT_LINE_API_MAX_RETRIES, "デフォルトリトライ回数は1回");
     assert.equal(defConfig.retryDelayMs, 500, "デフォルトリトライ間隔は500ms");
 
-    process.env.LINE_API_MAX_RETRIES = "3";
+    process.env.LINE_API_MAX_RETRIES = "2";
     process.env.LINE_API_RETRY_DELAY_MS = "800";
     const customConfig = getLineApiRetryConfig();
-    assert.equal(customConfig.maxRetries, 3, "環境変数LINE_API_MAX_RETRIESが反映される");
+    assert.equal(customConfig.maxRetries, 2, "環境変数LINE_API_MAX_RETRIESが反映される");
     assert.equal(customConfig.retryDelayMs, 800, "環境変数LINE_API_RETRY_DELAY_MSが反映される");
+
+    process.env.LINE_API_MAX_RETRIES = "99";
+    const cappedConfig = getLineApiRetryConfig();
+    assert.equal(
+      cappedConfig.maxRetries,
+      MAX_ALLOWED_LINE_API_RETRIES,
+      "過剰なリトライ回数は上限値に制限される"
+    );
 
     process.env.LINE_API_MAX_RETRIES = "3abc";
     process.env.LINE_API_RETRY_DELAY_MS = "-100";
     const fallbackConfig = getLineApiRetryConfig();
-    assert.equal(fallbackConfig.maxRetries, 2, "不正なリトライ回数はデフォルトにフォールバック");
+    assert.equal(
+      fallbackConfig.maxRetries,
+      DEFAULT_LINE_API_MAX_RETRIES,
+      "不正なリトライ回数はデフォルトにフォールバック"
+    );
     assert.equal(fallbackConfig.retryDelayMs, 500, "負のリトライ間隔はデフォルトにフォールバック");
   } finally {
     if (prevRetries !== undefined) process.env.LINE_API_MAX_RETRIES = prevRetries;
@@ -131,7 +146,7 @@ import { POST as upsertProfile } from "../app/api/profiles/route";
   console.log("[PASS] isLineAvatarExpired correctly checks avatar TTL");
 }
 
-// --- 5. fetchWithRetry tests ---
+// --- 5. fetchWithRetry & isRetryableLineError tests ---
 async function testFetchWithRetry() {
   let callCount = 0;
   const res = await fetchWithRetry(
@@ -159,7 +174,23 @@ async function testFetchWithRetry() {
   );
   assert.equal(nonRetryableCalls, 1, "retryable: false のエラーはリトライしない");
 
-  console.log("[PASS] fetchWithRetry handles retries and non-retryable errors properly");
+  let timeoutCalls = 0;
+  const timeoutErr = new DOMException("The operation was aborted due to timeout", "TimeoutError");
+  assert.equal(isRetryableLineError(timeoutErr), false, "TimeoutError は再試行不可");
+  await assert.rejects(
+    async () =>
+      fetchWithRetry(
+        async () => {
+          timeoutCalls++;
+          throw timeoutErr;
+        },
+        { maxRetries: 3, retryDelayMs: 10 }
+      ),
+    /aborted due to timeout/
+  );
+  assert.equal(timeoutCalls, 1, "TimeoutError はリトライしない");
+
+  console.log("[PASS] fetchWithRetry handles retries, non-retryable, and timeout errors properly");
 }
 
 // --- 6. refreshLineAvatarIfExpired tests ---
@@ -374,7 +405,7 @@ async function testRefreshLineAvatarIfExpired() {
     }
   }
 
-  // Case G: LINE API 500 取得失敗時 -> リトライ後に既存画像へフォールバック＆クールダウン期間中は再試行を抑制
+  // Case G: LINE API 500 取得失敗時 -> リトライ後に既存画像へフォールバック＆DBバックオフ日時とメモリ双方でクールダウン抑制
   {
     resetLineAvatarRefreshState();
     const originalFetch = global.fetch;
@@ -385,11 +416,11 @@ async function testRefreshLineAvatarIfExpired() {
 
     const existingIcon = "https://profile.line-scdn.net/existing-fallback";
     let attempts = 0;
-    let updateCalled = false;
+    let backoffDateSaved: Date | null = null;
     const mockDb: ProfileAvatarDbClient = {
       profile: {
-        update: async () => {
-          updateCalled = true;
+        update: async (args) => {
+          backoffDateSaved = args.data.avatarIconUpdatedAt;
         },
       },
     };
@@ -401,16 +432,18 @@ async function testRefreshLineAvatarIfExpired() {
 
     try {
       const baseNow = 1_000_000;
+      const ttlMs = 600_000; // 10分
+      const cooldownMs = 60_000; // 1分
       const res = await refreshLineAvatarIfExpired(
         {
           userId,
           lineUserId,
           avatarIcon: existingIcon,
-          avatarIconUpdatedAt: new Date(baseNow - 100000),
+          avatarIconUpdatedAt: new Date(baseNow - ttlMs - 10_000),
         },
         {
-          ttlMs: 60000,
-          failureCooldownMs: 60000,
+          ttlMs,
+          failureCooldownMs: cooldownMs,
           now: baseNow,
           dbClient: mockDb,
           channelAccessToken: "test-token",
@@ -419,26 +452,51 @@ async function testRefreshLineAvatarIfExpired() {
       assert.equal(res.avatarIcon, existingIcon, "API失敗時は既存の画像URLをフォールバック返却");
       assert.equal(res.updated, false);
       assert.equal(attempts, 2, "初回+リトライ1回の計2回実行される");
-      assert.equal(updateCalled, false, "失敗時はDBの更新日時を進めない");
+      assert.ok(backoffDateSaved !== null, "DBにクールダウン用バックオフ日時が記録される");
+      const savedTime = (backoffDateSaved as Date).getTime();
+      assert.equal(
+        savedTime,
+        baseNow - ttlMs + cooldownMs,
+        "avatarIconUpdatedAt が now - ttl + cooldown に設定される"
+      );
 
-      // クールダウン期間内の再呼び出しでは fetch が呼ばれないことを確認
+      // 別インスタンスを模擬してメモリ状態をリセットしても、DBの backoffDateSaved によりクールダウン期間中は再試行しない
+      resetLineAvatarRefreshState();
       const secondRes = await refreshLineAvatarIfExpired(
         {
           userId,
           lineUserId,
           avatarIcon: existingIcon,
-          avatarIconUpdatedAt: new Date(baseNow - 100000),
+          avatarIconUpdatedAt: backoffDateSaved,
         },
         {
-          ttlMs: 60000,
-          failureCooldownMs: 60000,
-          now: baseNow + 1000,
+          ttlMs,
+          failureCooldownMs: cooldownMs,
+          now: baseNow + 30_000, // クールダウン(60秒)の途中
           dbClient: mockDb,
           channelAccessToken: "test-token",
         }
       );
       assert.equal(secondRes.avatarIcon, existingIcon);
-      assert.equal(attempts, 2, "クールダウン期間中はLINE APIを再試行しない");
+      assert.equal(attempts, 2, "別インスタンスでもDBバックオフによりクールダウン期間中は再試行しない");
+
+      // クールダウン期間経過後は再び期限切れとなり再試行される
+      await refreshLineAvatarIfExpired(
+        {
+          userId,
+          lineUserId,
+          avatarIcon: existingIcon,
+          avatarIconUpdatedAt: backoffDateSaved,
+        },
+        {
+          ttlMs,
+          failureCooldownMs: cooldownMs,
+          now: baseNow + cooldownMs, // クールダウン満了
+          dbClient: mockDb,
+          channelAccessToken: "test-token",
+        }
+      );
+      assert.equal(attempts, 4, "クールダウン満了後は再試行される");
     } finally {
       global.fetch = originalFetch;
       if (prevRetries !== undefined) process.env.LINE_API_MAX_RETRIES = prevRetries;
@@ -448,14 +506,13 @@ async function testRefreshLineAvatarIfExpired() {
     }
   }
 
-  // Case H: LINE API 401/403 応答時 -> リトライせずエラーログを出し、更新日時を進めない
+  // Case H: LINE API 401/403 応答時 -> リトライせずエラーログを出し（lineUserIdは出力しない）、クールダウンを設定
   {
     resetLineAvatarRefreshState();
     const originalFetch = global.fetch;
     const originalConsoleError = console.error;
     const existingIcon = "https://profile.line-scdn.net/existing-401";
     let attempts = 0;
-    let updateCalled = false;
     const errorLogs: string[] = [];
 
     console.error = (...args: unknown[]) => {
@@ -464,9 +521,7 @@ async function testRefreshLineAvatarIfExpired() {
 
     const mockDb: ProfileAvatarDbClient = {
       profile: {
-        update: async () => {
-          updateCalled = true;
-        },
+        update: async () => {},
       },
     };
 
@@ -488,14 +543,53 @@ async function testRefreshLineAvatarIfExpired() {
       assert.equal(res.avatarIcon, existingIcon, "401時は既存アイコンを維持");
       assert.equal(res.updated, false);
       assert.equal(attempts, 1, "401はリトライしない");
-      assert.equal(updateCalled, false, "401時はavatarIconUpdatedAtを更新しない");
       assert.ok(
         errorLogs.some((log) => log.includes("401")),
         "401エラーがconsole.errorに出力される"
       );
+      assert.ok(
+        errorLogs.every((log) => !log.includes(lineUserId)),
+        "エラーログに個人識別子(lineUserId)を含めない"
+      );
     } finally {
       global.fetch = originalFetch;
       console.error = originalConsoleError;
+    }
+  }
+
+  // Case H2: LINE API タイムアウト時 -> リトライせず1回で終了し既存アイコンへフォールバック
+  {
+    resetLineAvatarRefreshState();
+    const originalFetch = global.fetch;
+    const existingIcon = "https://profile.line-scdn.net/existing-timeout";
+    let attempts = 0;
+
+    const mockDb: ProfileAvatarDbClient = {
+      profile: {
+        update: async () => {},
+      },
+    };
+
+    global.fetch = async () => {
+      attempts++;
+      throw new DOMException("The operation was aborted due to timeout", "TimeoutError");
+    };
+
+    try {
+      const res = await refreshLineAvatarIfExpired(
+        {
+          userId,
+          lineUserId,
+          avatarIcon: existingIcon,
+          avatarIconUpdatedAt: new Date(Date.now() - 100000),
+        },
+        { ttlMs: 60000, dbClient: mockDb, channelAccessToken: "test-token" }
+      );
+      assert.equal(res.avatarIcon, existingIcon, "タイムアウト時は既存アイコンへフォールバック");
+      assert.equal(res.updated, false);
+      assert.equal(attempts, 1, "タイムアウト時はリトライせず1回で終了する");
+    } finally {
+      global.fetch = originalFetch;
     }
   }
 
@@ -660,12 +754,17 @@ async function testRefreshLineAvatarIfExpired() {
 async function testProfileApiRoutes() {
   resetLineAvatarRefreshState();
   const userId = "00000000-0000-0000-0000-000000000123";
+  const friendViewerId = "00000000-0000-0000-0000-000000000456";
+  const staleUrl = "https://profile.line-scdn.net/route-stale";
   const refreshedUrl = "https://profile.line-scdn.net/route-refreshed";
 
   const origFindUnique = prisma.profile.findUnique;
   const origUpdate = prisma.profile.update;
+  const origUpsert = prisma.profile.upsert;
+  const origQueryRaw = prisma.$queryRaw;
   const origEventCount = prisma.event.count;
   const origParticipantCount = prisma.eventParticipant.count;
+  const origFriendshipFindFirst = prisma.friendship.findFirst;
   const origFriendshipFindMany = prisma.friendship.findMany;
   const origFetch = global.fetch;
   const prevToken = process.env.LINE_MESSAGING_CHANNEL_ACCESS_TOKEN;
@@ -678,7 +777,7 @@ async function testProfileApiRoutes() {
         userId,
         lineUserId: "U999999",
         displayName: "テストユーザー",
-        avatarIcon: "https://profile.line-scdn.net/route-stale",
+        avatarIcon: staleUrl,
         avatarIconUpdatedAt: new Date(Date.now() - DEFAULT_LINE_AVATAR_TTL_MS - 1000),
         gender: "unspecified",
         birthDate: null,
@@ -703,9 +802,14 @@ async function testProfileApiRoutes() {
 
     (prisma.event as unknown as { count: typeof prisma.event.count }).count = (async () =>
       1) as unknown as typeof prisma.event.count;
+    (prisma as unknown as { $queryRaw: typeof prisma.$queryRaw }).$queryRaw = (async () =>
+      []) as unknown as typeof prisma.$queryRaw;
     (
       prisma.eventParticipant as unknown as { count: typeof prisma.eventParticipant.count }
     ).count = (async () => 2) as unknown as typeof prisma.eventParticipant.count;
+    (
+      prisma.friendship as unknown as { findFirst: typeof prisma.friendship.findFirst }
+    ).findFirst = (async () => ({ userId: friendViewerId })) as unknown as typeof prisma.friendship.findFirst;
     (
       prisma.friendship as unknown as { findMany: typeof prisma.friendship.findMany }
     ).findMany = (async () => []) as unknown as typeof prisma.friendship.findMany;
@@ -713,53 +817,100 @@ async function testProfileApiRoutes() {
     global.fetch = async () =>
       new Response(JSON.stringify({ pictureUrl: refreshedUrl }), { status: 200 });
 
+    // 7-1: 本人が GET /api/profiles/[id] を呼んだ場合は更新後の最新アバターURLと lineUserId を返す
     const getRes = await getProfileById(
       new Request(`http://localhost/api/profiles/${userId}?viewerId=${userId}`),
       { params: Promise.resolve({ id: userId }) }
     );
     assert.equal(getRes.status, 200);
-    const body = (await getRes.json()) as { avatarIcon?: string };
+    const body = (await getRes.json()) as { avatarIcon?: string; lineUserId?: string };
     assert.equal(
       body.avatarIcon,
       refreshedUrl,
-      "GET /api/profiles/[id] が自動更新後の最新アバターURLを返す"
+      "本人による GET /api/profiles/[id] が自動更新後の最新アバターURLを返す"
     );
+    assert.equal(body.lineUserId, "U999999", "本人には lineUserId が返る");
 
-    // POST /api/profiles: 不正な avatarIconUpdatedAt は 400 を返す
-    const invalidDateRes = await upsertProfile(
+    // 7-2: 他人（フレンド）が GET /api/profiles/[id] を呼んだ場合はレスポンスをブロックせず即座に返し、lineUserId を隠す
+    resetLineAvatarRefreshState();
+    let backgroundFetchStarted = false;
+    global.fetch = async () => {
+      backgroundFetchStarted = true;
+      return new Response(JSON.stringify({ pictureUrl: refreshedUrl }), { status: 200 });
+    };
+
+    const friendRes = await getProfileById(
+      new Request(`http://localhost/api/profiles/${userId}?viewerId=${friendViewerId}`),
+      { params: Promise.resolve({ id: userId }) }
+    );
+    assert.equal(friendRes.status, 200);
+    const friendBody = (await friendRes.json()) as { avatarIcon?: string; lineUserId?: string };
+    assert.equal(friendBody.avatarIcon, staleUrl, "他人の閲覧時は既存アイコンを即座に返す");
+    assert.equal(friendBody.lineUserId, undefined, "他人には lineUserId を返さない");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+    assert.equal(backgroundFetchStarted, true, "バックグラウンドでアバター更新が実行される");
+
+    // 7-3: POST /api/profiles で avatarIcon 変更時にサーバー側で avatarIconUpdatedAt が設定される
+    let upsertedUpdateData: { avatarIconUpdatedAt?: Date } | null = null;
+    (prisma.profile as unknown as { upsert: typeof prisma.profile.upsert }).upsert = (async (
+      args: { update: { avatarIconUpdatedAt?: Date } }
+    ) => {
+      upsertedUpdateData = args.update;
+      return {
+        userId,
+        displayName: "テストユーザー",
+        avatarIcon: "https://profile.line-scdn.net/new-post-avatar",
+        lineUserId: "U999999",
+      };
+    }) as unknown as typeof prisma.profile.upsert;
+
+    const postChangedRes = await upsertProfile(
       new Request("http://localhost/api/profiles", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           userId,
           displayName: "テストユーザー",
-          avatarIconUpdatedAt: "invalid-date",
+          avatarIcon: "https://profile.line-scdn.net/new-post-avatar",
         }),
       })
     );
-    assert.equal(invalidDateRes.status, 400, "不正なavatarIconUpdatedAtは400を返す");
+    assert.equal(postChangedRes.status, 200);
+    assert.ok(
+      (upsertedUpdateData as unknown as { avatarIconUpdatedAt?: Date })?.avatarIconUpdatedAt instanceof Date,
+      "avatarIcon変更時はサーバー側でavatarIconUpdatedAtが現在日時に更新される"
+    );
 
-    // POST /api/profiles: 未来日時の avatarIconUpdatedAt は 400 を返す
-    const futureDateRes = await upsertProfile(
+    const postUnchangedRes = await upsertProfile(
       new Request("http://localhost/api/profiles", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           userId,
           displayName: "テストユーザー",
-          avatarIconUpdatedAt: new Date(Date.now() + 86400000).toISOString(),
+          avatarIcon: staleUrl,
         }),
       })
     );
-    assert.equal(futureDateRes.status, 400, "未来日時のavatarIconUpdatedAtは400を返す");
+    assert.equal(postUnchangedRes.status, 200);
+    assert.equal(
+      (upsertedUpdateData as unknown as { avatarIconUpdatedAt?: Date })?.avatarIconUpdatedAt,
+      undefined,
+      "avatarIcon未変更時はavatarIconUpdatedAtを上書きしない"
+    );
   } finally {
     (prisma.profile as unknown as { findUnique: typeof prisma.profile.findUnique }).findUnique =
       origFindUnique;
     (prisma.profile as unknown as { update: typeof prisma.profile.update }).update = origUpdate;
+    (prisma.profile as unknown as { upsert: typeof prisma.profile.upsert }).upsert = origUpsert;
+    (prisma as unknown as { $queryRaw: typeof prisma.$queryRaw }).$queryRaw = origQueryRaw;
     (prisma.event as unknown as { count: typeof prisma.event.count }).count = origEventCount;
     (
       prisma.eventParticipant as unknown as { count: typeof prisma.eventParticipant.count }
     ).count = origParticipantCount;
+    (
+      prisma.friendship as unknown as { findFirst: typeof prisma.friendship.findFirst }
+    ).findFirst = origFriendshipFindFirst;
     (
       prisma.friendship as unknown as { findMany: typeof prisma.friendship.findMany }
     ).findMany = origFriendshipFindMany;
