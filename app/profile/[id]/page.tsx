@@ -160,7 +160,7 @@ export default function FriendProfilePage() {
 
   return (
     <div className="min-h-screen">
-      <header className="sticky top-0 z-40 border-b border-orange-100 bg-white/95 backdrop-blur">
+      <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-xl shadow-sm">
         <div className="mx-auto flex max-w-md items-center gap-3 px-4 py-4 sm:max-w-4xl sm:px-6">
           <Link
             href="/friends"
@@ -174,7 +174,7 @@ export default function FriendProfilePage() {
       </header>
 
       <main className="mx-auto max-w-md px-4 py-8 sm:max-w-4xl sm:px-6">
-        <div className="rounded-3xl border border-orange-100/70 p-5">
+        <div className="rounded-3xl p-5">
           <div className="flex flex-col items-center text-center">
             <div
               className={`grid h-20 w-20 place-items-center overflow-hidden rounded-full text-4xl ${
@@ -262,7 +262,7 @@ export default function FriendProfilePage() {
                   <Link
                     key={event.id}
                     href={`/events/${event.id}`}
-                    className="flex items-center gap-3 rounded-2xl border border-orange-100 bg-white p-4 shadow-sm"
+                    className="flex items-center gap-3 rounded-2xl bg-white p-4 shadow-card"
                   >
                     <div className="grid h-11 w-11 place-items-center rounded-2xl bg-orange-100 text-[var(--accent)]">
                       <span className="material-symbols-rounded">event</span>

@@ -15,6 +15,7 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-sora);
   --font-mono: var(--font-space-mono);
+  --shadow-card: 0 1px 8px rgba(0, 0, 0, 0.08);
 }
 
 @media (prefers-color-scheme: dark) {
@@ -50,14 +51,6 @@ input,
 select,
 textarea {
   border: 0 !important;
-  box-shadow: 0 1px 8px rgba(0, 0, 0, 0.08);
-}
-
-button.border,
-button[class*=" border-"],
-a.border,
-a[class*=" border-"] {
-  border-color: transparent;
   box-shadow: 0 1px 8px rgba(0, 0, 0, 0.08);
 }
 

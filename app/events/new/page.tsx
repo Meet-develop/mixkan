@@ -105,7 +105,7 @@ const settingOptions: Array<{
 ];
 
 const plusButtonClass =
-  "grid h-7 w-7 place-items-center rounded-full border border-dashed border-gray-400 bg-gray-50 text-gray-500";
+  "grid h-7 w-7 place-items-center rounded-full bg-gray-50 text-gray-500 shadow-card";
 
 const buildAutoTitle = (elements: string[]) => {
   if (elements.length === 0) return "";
@@ -739,7 +739,7 @@ function EventCreatePageContent() {
 
   return (
     <div className="min-h-screen pb-4">
-      <header className="sticky top-0 z-40 border-b border-orange-100 bg-white/95 backdrop-blur">
+      <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-xl shadow-sm">
         <div className="mx-auto flex max-w-md items-center gap-3 px-4 py-4 sm:max-w-5xl sm:px-6">
           <Link
             href="/"
@@ -997,7 +997,7 @@ function EventCreatePageContent() {
                 )}
 
                 {eventAreaOptions.length === 0 ? (
-                  <div className="mt-3 rounded-2xl border border-dashed border-orange-200 bg-white/80 px-4 py-5 text-center text-xs text-[var(--muted)]">
+                  <div className="mt-3 rounded-2xl border border-dashed border-[var(--muted)]/40 bg-white/80 px-4 py-5 text-center text-xs text-[var(--muted)]">
                     「＋」からイベントで使うエリアを追加してください。
                   </div>
                 ) : (

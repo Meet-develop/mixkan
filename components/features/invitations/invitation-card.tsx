@@ -198,7 +198,7 @@ export function InvitationCard({
                   setSelectedResponse("accepted");
                   handleAIGenerate("accepted");
                 }}
-                className="flex items-center justify-center gap-1 py-2 bg-green-50 text-green-600 rounded-xl text-xs font-medium border border-green-200 hover:bg-green-100 transition-colors"
+                className="flex items-center justify-center gap-1 py-2 bg-green-50 text-green-600 rounded-xl text-xs font-medium shadow-card hover:bg-green-100 transition-colors"
               >
                 <Sparkles size={14} />
                 AI返信
@@ -211,7 +211,7 @@ export function InvitationCard({
                   setSelectedResponse("maybe");
                   handleAIGenerate("maybe");
                 }}
-                className="flex items-center justify-center gap-1 py-2 bg-yellow-50 text-yellow-600 rounded-xl text-xs font-medium border border-yellow-200 hover:bg-yellow-100 transition-colors"
+                className="flex items-center justify-center gap-1 py-2 bg-yellow-50 text-yellow-600 rounded-xl text-xs font-medium shadow-card hover:bg-yellow-100 transition-colors"
               >
                 <Sparkles size={14} />
                 AI返信
@@ -224,7 +224,7 @@ export function InvitationCard({
                   setSelectedResponse("declined");
                   handleAIGenerate("declined");
                 }}
-                className="flex items-center justify-center gap-1 py-2 bg-red-50 text-red-600 rounded-xl text-xs font-medium border border-red-200 hover:bg-red-100 transition-colors"
+                className="flex items-center justify-center gap-1 py-2 bg-red-50 text-red-600 rounded-xl text-xs font-medium shadow-card hover:bg-red-100 transition-colors"
               >
                 <Sparkles size={14} />
                 AI返信
